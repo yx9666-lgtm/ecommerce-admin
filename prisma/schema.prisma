@@ -1,0 +1,593 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  STORE_ADMIN
+  OPERATOR
+  CUSTOMER_SERVICE
+  FINANCE
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT
+  PENDING_SHIPMENT
+  SHIPPED
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum Platform {
+  SHOPEE
+  LAZADA
+  TIKTOK
+  PGMALL
+}
+
+enum InventoryActionType {
+  INBOUND
+  OUTBOUND
+  TRANSFER
+  ADJUSTMENT
+  STOCKTAKE
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  email         String    @unique
+  passwordHash  String    @map("password_hash")
+  displayName   String?   @map("display_name")
+  avatar        String?
+  role          UserRole  @default(OPERATOR)
+  isActive      Boolean   @default(true) @map("is_active")
+  lastLoginAt   DateTime? @map("last_login_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  stores        StoreUser[]
+  loginLogs     LoginLog[]
+
+  @@map("users")
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  ip        String?
+  userAgent String?  @map("user_agent")
+  success   Boolean
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("login_logs")
+}
+
+model Store {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  logo        String?
+  currency    String   @default("MYR")
+  timezone    String   @default("Asia/Kuala_Lumpur")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users               StoreUser[]
+  platformConnections PlatformConnection[]
+  channels            Channel[]
+  products            Product[]
+  orders              Order[]
+  customers           Customer[]
+  warehouses          Warehouse[]
+  expenses            Expense[]
+  incomes             Income[]
+  promotions          Promotion[]
+  suppliers           Supplier[]
+  purchaseOrders      PurchaseOrder[]
+
+  @@map("stores")
+}
+
+model StoreUser {
+  id      String   @id @default(cuid())
+  storeId String   @map("store_id")
+  userId  String   @map("user_id")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, userId])
+  @@map("store_users")
+}
+
+model PlatformConnection {
+  id            String    @id @default(cuid())
+  storeId       String    @map("store_id")
+  platform      Platform
+  shopId        String?   @map("shop_id")
+  shopName      String?   @map("shop_name")
+  accessToken   String?   @map("access_token")
+  refreshToken  String?   @map("refresh_token")
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  isActive      Boolean   @default(true) @map("is_active")
+  lastSyncAt    DateTime? @map("last_sync_at")
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  syncLogs SyncLog[]
+
+  @@unique([storeId, platform, shopId])
+  @@map("platform_connections")
+}
+
+model SyncLog {
+  id           String   @id @default(cuid())
+  connectionId String   @map("connection_id")
+  action       String
+  status       String
+  itemCount    Int?     @map("item_count")
+  errorMessage String?  @map("error_message")
+  startedAt    DateTime @map("started_at")
+  completedAt  DateTime? @map("completed_at")
+
+  connection PlatformConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@index([connectionId])
+  @@map("sync_logs")
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  storeId     String        @map("store_id")
+  sku         String
+  nameZh      String        @map("name_zh")
+  nameEn      String        @map("name_en")
+  descZh      String?       @map("desc_zh")
+  descEn      String?       @map("desc_en")
+  costPrice   Float         @default(0) @map("cost_price")
+  sellingPrice Float        @map("selling_price")
+  comparePrice Float?       @map("compare_price")
+  weight      Float?
+  status      ProductStatus @default(DRAFT)
+  categoryId  String?       @map("category_id")
+  brand       String?
+  totalStock  Int           @default(0) @map("total_stock")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  store     Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category  Category?        @relation(fields: [categoryId], references: [id])
+  variants  ProductVariant[]
+  images    ProductImage[]
+  listings  PlatformListing[]
+  orderItems OrderItem[]
+
+  @@unique([storeId, sku])
+  @@index([storeId, updatedAt])
+  @@index([storeId, status])
+  @@map("products")
+}
+
+model ProductVariant {
+  id         String  @id @default(cuid())
+  productId  String  @map("product_id")
+  sku        String
+  nameZh     String  @map("name_zh")
+  nameEn     String  @map("name_en")
+  price      Float
+  costPrice  Float   @default(0) @map("cost_price")
+  stock      Int     @default(0)
+  weight     Float?
+  attributes Json?
+
+  product          Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventory        InventoryItem[]
+  orderItems       OrderItem[]
+  channelInventory ChannelInventory[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String  @map("product_id")
+  url       String
+  alt       String?
+  position  Int     @default(0)
+  isPrimary Boolean @default(false) @map("is_primary")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  nameZh   String  @map("name_zh")
+  nameEn   String  @map("name_en")
+  parentId String? @map("parent_id")
+  position Int     @default(0)
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@map("categories")
+}
+
+model PlatformListing {
+  id              String   @id @default(cuid())
+  productId       String   @map("product_id")
+  platform        Platform
+  platformItemId  String?  @map("platform_item_id")
+  status          String   @default("draft")
+  url             String?
+  lastSyncAt      DateTime? @map("last_sync_at")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, platform])
+  @@map("platform_listings")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  storeId         String      @map("store_id")
+  channelId       String?     @map("channel_id")
+  platform        Platform?
+  platformOrderId String      @map("platform_order_id")
+  status          OrderStatus @default(PENDING_PAYMENT)
+  customerId      String?     @map("customer_id")
+  subtotal        Float
+  shippingFee     Float       @default(0) @map("shipping_fee")
+  discount        Float       @default(0)
+  tax             Float       @default(0)
+  totalAmount     Float       @map("total_amount")
+  currency        String      @default("MYR")
+  platformFee     Float       @default(0) @map("platform_fee")
+  commissionFee   Float       @default(0) @map("commission_fee")
+  buyerNote       String?     @map("buyer_note")
+  sellerNote      String?     @map("seller_note")
+  shippingAddress Json?       @map("shipping_address")
+  paidAt          DateTime?   @map("paid_at")
+  shippedAt       DateTime?   @map("shipped_at")
+  deliveredAt     DateTime?   @map("delivered_at")
+  completedAt     DateTime?   @map("completed_at")
+  cancelledAt     DateTime?   @map("cancelled_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  store    Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  channel  Channel?   @relation(fields: [channelId], references: [id])
+  customer Customer?  @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+  shipment Shipment?
+  refunds  Refund[]
+
+  @@index([storeId, createdAt])
+  @@index([storeId, status])
+  @@index([storeId, channelId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String  @map("order_id")
+  productId   String? @map("product_id")
+  variantId   String? @map("variant_id")
+  name        String
+  sku         String?
+  quantity    Int
+  unitPrice   Float   @map("unit_price")
+  totalPrice  Float   @map("total_price")
+  platformItemId String? @map("platform_item_id")
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([sku])
+  @@map("order_items")
+}
+
+model Shipment {
+  id              String    @id @default(cuid())
+  orderId         String    @unique @map("order_id")
+  carrier         String
+  trackingNumber  String    @map("tracking_number")
+  status          String    @default("pending")
+  shippedAt       DateTime? @map("shipped_at")
+  deliveredAt     DateTime? @map("delivered_at")
+  metadata        Json?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("shipments")
+}
+
+model Refund {
+  id          String   @id @default(cuid())
+  orderId     String   @map("order_id")
+  amount      Float
+  reason      String?
+  status      String   @default("pending")
+  platformRefundId String? @map("platform_refund_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  resolvedAt  DateTime? @map("resolved_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("refunds")
+}
+
+model Customer {
+  id          String   @id @default(cuid())
+  storeId     String   @map("store_id")
+  name        String
+  email       String?
+  phone       String?
+  platform    Platform?
+  platformUserId String? @map("platform_user_id")
+  totalOrders Int      @default(0) @map("total_orders")
+  totalSpent  Float    @default(0) @map("total_spent")
+  lastOrderAt DateTime? @map("last_order_at")
+  tags        String[]
+  tier        String   @default("regular")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  store  Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders Order[]
+
+  @@index([storeId])
+  @@map("customers")
+}
+
+model Warehouse {
+  id        String  @id @default(cuid())
+  storeId   String  @map("store_id")
+  name      String
+  address   String?
+  isDefault Boolean @default(false) @map("is_default")
+  isActive  Boolean @default(true) @map("is_active")
+
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  inventory      InventoryItem[]
+  actions        InventoryAction[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("warehouses")
+}
+
+model InventoryItem {
+  id          String @id @default(cuid())
+  warehouseId String @map("warehouse_id")
+  variantId   String @map("variant_id")
+  quantity    Int    @default(0)
+  safetyStock Int    @default(10) @map("safety_stock")
+
+  warehouse Warehouse      @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  variant   ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([warehouseId, variantId])
+  @@map("inventory_items")
+}
+
+model InventoryAction {
+  id          String              @id @default(cuid())
+  warehouseId String              @map("warehouse_id")
+  type        InventoryActionType
+  variantSku  String              @map("variant_sku")
+  quantity    Int
+  note        String?
+  operator    String?
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  warehouse Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+
+  @@index([warehouseId, createdAt])
+  @@map("inventory_actions")
+}
+
+model Expense {
+  id           String   @id @default(cuid())
+  storeId      String   @map("store_id")
+  category     String
+  amount       Float
+  currency     String   @default("MYR")
+  note         String?
+  shopUsername  String?  @map("shop_username")
+  date         DateTime
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, date])
+  @@map("expenses")
+}
+
+model Income {
+  id           String   @id @default(cuid())
+  storeId      String   @map("store_id")
+  category     String
+  amount       Float
+  currency     String   @default("MYR")
+  note         String?
+  shopUsername  String?  @map("shop_username")
+  date         DateTime
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, date])
+  @@map("incomes")
+}
+
+model Promotion {
+  id          String    @id @default(cuid())
+  storeId     String    @map("store_id")
+  nameZh      String    @map("name_zh")
+  nameEn      String    @map("name_en")
+  type        String
+  platform    Platform?
+  discount    Float?
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime  @map("end_date")
+  status      String    @default("draft")
+  budget      Float?
+  spent       Float     @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("promotions")
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  storeId     String   @map("store_id")
+  supplierNo  String   @default("") @map("supplier_no")
+  name        String
+  contactName String?  @map("contact_name")
+  phone1      String?  @map("phone1")
+  phone2      String?  @map("phone2")
+  phone3      String?  @map("phone3")
+  address     String?
+  country     String   @default("MY")
+  notes       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  store          Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  purchaseOrders PurchaseOrder[]
+
+  @@index([storeId])
+  @@map("suppliers")
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SUBMITTED
+  CONFIRMED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id               String              @id @default(cuid())
+  storeId          String              @map("store_id")
+  supplierId       String              @map("supplier_id")
+  poNumber         String              @unique @map("po_number")
+  supplierInvoiceNo String?            @map("supplier_invoice_no")
+  status           PurchaseOrderStatus @default(DRAFT)
+  subtotal         Float               @default(0)
+  shippingCost     Float               @default(0) @map("shipping_cost")
+  tax              Float               @default(0)
+  totalAmount      Float               @default(0) @map("total_amount")
+  purchaseCurrency String              @default("CNY") @map("purchase_currency")
+  localCurrency    String              @default("MYR") @map("local_currency")
+  exchangeRate     Float               @default(1) @map("exchange_rate")
+  totalAmountLocal Float               @default(0) @map("total_amount_local")
+  refundAmount     Float               @default(0) @map("refund_amount")
+  refundAmountLocal Float              @default(0) @map("refund_amount_local")
+  notes            String?
+  expectedDate     DateTime?           @map("expected_date")
+  receivedDate     DateTime?           @map("received_date")
+  warehouseId      String?             @map("warehouse_id")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  store     Store               @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id])
+  warehouse Warehouse?          @relation(fields: [warehouseId], references: [id])
+  items     PurchaseOrderItem[]
+
+  @@index([storeId, createdAt])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String   @map("purchase_order_id")
+  productName     String   @map("product_name")
+  sku             String?
+  images          String[] @default([])
+  quantity        Int
+  unitCost        Float    @map("unit_cost")
+  totalCost       Float    @map("total_cost")
+  receivedQty     Int      @default(0) @map("received_qty")
+  defectQty       Int      @default(0) @map("defect_qty")
+  defectNote      String?  @map("defect_note")
+
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseOrderId])
+  @@index([sku])
+  @@map("purchase_order_items")
+}
+
+model Channel {
+  id           String   @id @default(cuid())
+  storeId      String   @map("store_id")
+  name         String
+  code         String
+  type         String   @default("marketplace")
+  icon         String?
+  color        String?
+  shopName     String?  @map("shop_name")
+  shopUsername  String?  @map("shop_username")
+  shopUrl      String?  @map("shop_url")
+  notes        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  store            Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orders           Order[]
+  channelInventory ChannelInventory[]
+
+  @@unique([storeId, code])
+  @@map("channels")
+}
+
+model ChannelInventory {
+  id        String @id @default(cuid())
+  channelId String @map("channel_id")
+  variantId String @map("variant_id")
+  allocated Int    @default(0)
+  reserved  Int    @default(0)
+
+  channel Channel        @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, variantId])
+  @@index([variantId])
+  @@map("channel_inventory")
+}
