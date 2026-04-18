@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -119,6 +129,16 @@
   .dark .glass-header {
     background: hsl(var(--card));
     border-bottom: 1px solid hsl(var(--border));
+  }
+
+  .glass-topnav {
+    background: hsl(var(--sidebar));
+    border-bottom: 1px solid hsl(var(--border));
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+  .dark .glass-topnav {
+    background: hsl(var(--sidebar));
+    border-bottom: 1px solid hsl(var(--sidebar-border));
   }
 
   /* ===== Neumorphism ===== */

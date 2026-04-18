@@ -4,6 +4,7 @@ import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 
 const createProductSchema = z.object({
+  sku: z.string().optional(),
   nameZh: z.string().min(1),
   nameEn: z.string().optional(),
   descZh: z.string().optional(),
@@ -114,18 +115,24 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 });
 
 async function generateNextSku(storeId: string): Promise<string> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { skuPrefix: true, skuStartNo: true } });
+  const prefix = store?.skuPrefix || "RJ";
+  const startStr = store?.skuStartNo || "1001";
+  const startNum = parseInt(startStr, 10) || 1001;
+  const fullPrefix = `${prefix}-`;
+
   const latest = await prisma.product.findFirst({
-    where: { storeId, sku: { startsWith: "RJ-" } },
+    where: { storeId, sku: { startsWith: fullPrefix } },
     orderBy: { sku: "desc" },
     select: { sku: true },
   });
 
-  if (!latest) return "RJ-1001";
+  if (!latest) return `${fullPrefix}${startStr}`;
 
-  const num = parseInt(latest.sku.replace("RJ-", ""), 10);
-  if (isNaN(num)) return "RJ-1001";
+  const num = parseInt(latest.sku.replace(fullPrefix, ""), 10);
+  if (isNaN(num)) return `${fullPrefix}${startStr}`;
 
-  return `RJ-${num + 1}`;
+  return `${fullPrefix}${num + 1}`;
 }
 
 export const POST = withTryCatch(async (req: NextRequest) => {
@@ -136,7 +143,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const body = await parseBody(req, createProductSchema);
   if (body instanceof NextResponse) return body;
 
-  const sku = await generateNextSku(storeId);
+  const sku = body.sku?.trim() || await generateNextSku(storeId);
 
   const product = await prisma.product.create({
     data: {

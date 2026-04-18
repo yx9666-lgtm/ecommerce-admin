@@ -2,10 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
 export async function GET() {
+  const result: {
+    status: "ok" | "degraded" | "error";
+    db: { status: "ok" | "error"; latency?: number };
+    uptime: number;
+  } = {
+    status: "ok",
+    db: { status: "ok" },
+    uptime: process.uptime(),
+  };
+
+  // Check database
   try {
+    const start = Date.now();
     await prisma.$queryRaw`SELECT 1`;
-    return NextResponse.json({ status: "ok" });
+    result.db = { status: "ok", latency: Date.now() - start };
   } catch {
-    return NextResponse.json({ status: "error", message: "Database unreachable" }, { status: 503 });
+    result.db = { status: "error" };
+    result.status = "degraded";
   }
+
+  const httpStatus = result.status === "ok" ? 200 : 503;
+  return NextResponse.json(result, { status: httpStatus });
 }

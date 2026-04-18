@@ -3,17 +3,15 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { TopNav } from "@/components/layout/top-nav";
 import { useAuthStore } from "@/stores/auth-store";
-import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const sidebarCollapsed = useAuthStore((s) => s.sidebarCollapsed);
   const theme = useAuthStore((s) => s.theme);
 
   useEffect(() => {
@@ -112,14 +110,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       {/* Content */}
       <div className="relative z-10">
-        <Sidebar />
-        <div
-          className={cn("transition-all duration-300")}
-          style={{ marginLeft: sidebarCollapsed ? "68px" : "240px" }}
-        >
+        <div className="sticky top-0 z-30">
           <Header />
-          <main className="p-6">{children}</main>
+          <TopNav />
         </div>
+        <main className="p-6">{children}</main>
       </div>
     </div>
   );

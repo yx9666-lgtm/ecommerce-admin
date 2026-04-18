@@ -9,17 +9,32 @@ const createWarehouseSchema = z.object({
   isDefault: z.boolean().optional(),
 });
 
-export const GET = withTryCatch(async (_req: NextRequest) => {
+export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
   const { storeId } = ctx;
 
-  const warehouses = await prisma.warehouse.findMany({
-    where: { storeId },
-    include: { _count: { select: { inventory: true } } },
-  });
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") || "";
 
-  return NextResponse.json({ items: warehouses });
+  const where: any = { storeId };
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { address: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const [warehouses, total] = await Promise.all([
+    prisma.warehouse.findMany({
+      where,
+      include: { _count: { select: { inventory: true } } },
+      orderBy: { name: "asc" },
+    }),
+    prisma.warehouse.count({ where }),
+  ]);
+
+  return NextResponse.json({ items: warehouses, total });
 });
 
 export const POST = withTryCatch(async (req: NextRequest) => {
@@ -30,8 +45,16 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const body = await parseBody(req, createWarehouseSchema);
   if (body instanceof NextResponse) return body;
 
+  // If setting as default, unset other defaults first
+  if (body.isDefault) {
+    await prisma.warehouse.updateMany({
+      where: { storeId, isDefault: true },
+      data: { isDefault: false },
+    });
+  }
+
   const warehouse = await prisma.warehouse.create({
-    data: { storeId, name: body.name, address: body.address, isDefault: body.isDefault || false },
+    data: { storeId, name: body.name, address: body.address || null, isDefault: body.isDefault || false },
   });
 
   return NextResponse.json(warehouse, { status: 201 });

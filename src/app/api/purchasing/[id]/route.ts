@@ -6,6 +6,8 @@ import prisma from "@/lib/db";
 const purchaseOrderItemSchema = z.object({
   productName: z.string().min(1),
   sku: z.string().min(1),
+  categoryId: z.string().optional(),
+  specs: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
   images: z.array(z.string()).optional(),
   quantity: z.number().int().min(1),
   unitCost: z.number().positive(),
@@ -101,6 +103,8 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
         create: (body.items || []).map((item: any) => ({
           productName: item.productName,
           sku: item.sku,
+          categoryId: item.categoryId || null,
+          specs: item.specs || [],
           images: item.images || [],
           quantity: item.quantity,
           unitCost: item.unitCost,

@@ -56,6 +56,7 @@ export default function ProductsPage() {
     nameZh: "", nameEn: "", descZh: "", descEn: "",
     costPrice: 0, sellingPrice: 0, comparePrice: 0,
     weight: 0, brand: "", status: "DRAFT", totalStock: 0,
+    sku: "",
   });
 
   const [pwAction, setPwAction] = useState<"edit" | "delete">("delete");
@@ -72,6 +73,7 @@ export default function ProductsPage() {
         nameZh: p.nameZh, nameEn: p.nameEn, descZh: "", descEn: "",
         costPrice: p.costPrice, sellingPrice: p.sellingPrice, comparePrice: 0,
         weight: 0, brand: p.brand || "", status: p.status, totalStock: p.totalStock,
+        sku: p.sku,
       });
       setShowAddDialog(true);
     });
@@ -118,10 +120,15 @@ export default function ProductsPage() {
 
   const openAddDialog = async () => {
     setEditingId(null);
-    setForm({ nameZh: "", nameEn: "", descZh: "", descEn: "", costPrice: 0, sellingPrice: 0, comparePrice: 0, weight: 0, brand: "", status: "DRAFT", totalStock: 0 });
+    setForm({ nameZh: "", nameEn: "", descZh: "", descEn: "", costPrice: 0, sellingPrice: 0, comparePrice: 0, weight: 0, brand: "", status: "DRAFT", totalStock: 0, sku: nextSku });
     await loadNextSku();
     setShowAddDialog(true);
   };
+
+  // Sync nextSku into form.sku when loaded for new product
+  useEffect(() => {
+    if (!editingId && nextSku) setForm(f => f.sku === "" || f.sku === nextSku ? { ...f, sku: nextSku } : f);
+  }, [nextSku, editingId]);
 
   const handleSubmit = async () => {
     if (!form.nameZh && !form.nameEn) return alert("请输入商品名称");
@@ -141,7 +148,7 @@ export default function ProductsPage() {
         });
       }
       setShowAddDialog(false);
-      setForm({ nameZh: "", nameEn: "", descZh: "", descEn: "", costPrice: 0, sellingPrice: 0, comparePrice: 0, weight: 0, brand: "", status: "DRAFT", totalStock: 0 });
+      setForm({ nameZh: "", nameEn: "", descZh: "", descEn: "", costPrice: 0, sellingPrice: 0, comparePrice: 0, weight: 0, brand: "", status: "DRAFT", totalStock: 0, sku: "" });
       setEditingId(null);
       setActiveTab("basic");
       loadData();
@@ -280,20 +287,25 @@ export default function ProductsPage() {
               {editingId ? t("editProduct") : t("addProduct")}
             </DialogTitle>
             <DialogDescription className="text-amber-200 mt-1 flex items-center gap-2">
-              {editingId ? "修改商品信息" : <>SKU 将自动生成：<span className="bg-muted px-2.5 py-0.5 rounded-full font-mono font-bold text-foreground text-sm">{nextSku}</span></>}
+              {editingId ? "修改商品信息" : "SKU 已自动生成，可手动修改"}
             </DialogDescription>
           </div>
 
           <div className="px-6 py-5">
-            {/* SKU Preview - only for new */}
+            {/* SKU - editable for new */}
             {!editingId && (
               <div className="bg-amber-50 dark:bg-amber-500/10 rounded-xl p-4 mb-5 flex items-center gap-3">
                 <Tag className="h-5 w-5 text-amber-600" />
-                <div>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">自动生成 SKU</p>
-                  <p className="font-mono text-lg font-bold text-amber-600 dark:text-amber-400">{nextSku}</p>
+                <div className="flex-1">
+                  <p className="text-xs text-amber-600 dark:text-amber-400 font-medium mb-1">SKU</p>
+                  <Input
+                    value={form.sku}
+                    onChange={(e) => setForm({ ...form, sku: e.target.value })}
+                    className="font-mono text-lg font-bold h-9 bg-white/50 dark:bg-white/5 border-amber-300 dark:border-amber-500/30"
+                    placeholder={nextSku}
+                  />
                 </div>
-                <div className="ml-auto text-xs text-amber-600 dark:text-amber-400">系统自动递增</div>
+                <div className="ml-auto text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">可自定义修改</div>
               </div>
             )}
 

@@ -6,6 +6,8 @@ import prisma from "@/lib/db";
 const purchaseOrderItemSchema = z.object({
   productName: z.string().min(1),
   sku: z.string().min(1),
+  categoryId: z.string().optional(),
+  specs: z.array(z.object({ name: z.string(), value: z.string() })).optional(),
   images: z.array(z.string()).optional(),
   quantity: z.number().int().min(1),
   unitCost: z.number().positive(),
@@ -87,9 +89,12 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const body = await parseBody(req, createPurchaseOrderSchema);
   if (body instanceof NextResponse) return body;
 
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { poPrefix: true } });
+  const poPrefix = store?.poPrefix || "RJ";
+
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const prefix = `RJ${dateStr}-`;
+  const prefix = `${poPrefix}${dateStr}-`;
   const todayCount = await prisma.purchaseOrder.count({
     where: { storeId, poNumber: { startsWith: prefix } },
   });
@@ -125,6 +130,8 @@ export const POST = withTryCatch(async (req: NextRequest) => {
         create: (body.items || []).map((item: any) => ({
           productName: item.productName,
           sku: item.sku,
+          categoryId: item.categoryId || null,
+          specs: item.specs || [],
           images: item.images || [],
           quantity: item.quantity,
           unitCost: item.unitCost,

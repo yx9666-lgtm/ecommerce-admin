@@ -18,6 +18,12 @@ export const GET = withTryCatch(async () => {
       currency: true,
       timezone: true,
       description: true,
+      skuPrefix: true,
+      skuStartNo: true,
+      supplierPrefix: true,
+      supplierStartNo: true,
+      poPrefix: true,
+      lowStockThreshold: true,
     },
   });
 
@@ -35,6 +41,12 @@ const updateStoreSchema = z.object({
   currency: z.string().optional(),
   timezone: z.string().optional(),
   description: z.string().nullable().optional(),
+  skuPrefix: z.string().min(1).max(10).optional(),
+  skuStartNo: z.string().min(1).max(10).optional(),
+  supplierPrefix: z.string().min(1).max(10).optional(),
+  supplierStartNo: z.string().min(1).max(10).optional(),
+  poPrefix: z.string().min(1).max(10).optional(),
+  lowStockThreshold: z.number().int().min(0).optional(),
 });
 
 export const PUT = withTryCatch(async (req: NextRequest) => {
@@ -54,6 +66,12 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
       currency: true,
       timezone: true,
       description: true,
+      skuPrefix: true,
+      skuStartNo: true,
+      supplierPrefix: true,
+      supplierStartNo: true,
+      poPrefix: true,
+      lowStockThreshold: true,
     },
   });
 

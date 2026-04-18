@@ -87,6 +87,12 @@ model Store {
   logo        String?
   currency    String   @default("MYR")
   timezone    String   @default("Asia/Kuala_Lumpur")
+  skuPrefix       String   @default("RJ") @map("sku_prefix")
+  skuStartNo      String   @default("1001") @map("sku_start_no")
+  supplierPrefix  String   @default("SUP") @map("supplier_prefix")
+  supplierStartNo String   @default("001") @map("supplier_start_no")
+  poPrefix            String   @default("RJ") @map("po_prefix")
+  lowStockThreshold   Int      @default(10) @map("low_stock_threshold")
   isActive    Boolean  @default(true) @map("is_active")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -103,6 +109,10 @@ model Store {
   promotions          Promotion[]
   suppliers           Supplier[]
   purchaseOrders      PurchaseOrder[]
+  categories          Category[]
+  brands              Brand[]
+  units               UnitOfMeasure[]
+  exchangeRates       ExchangeRate[]
 
   @@map("stores")
 }
@@ -225,15 +235,18 @@ model ProductImage {
 
 model Category {
   id       String  @id @default(cuid())
+  storeId  String  @map("store_id")
   nameZh   String  @map("name_zh")
   nameEn   String  @map("name_en")
   parentId String? @map("parent_id")
   position Int     @default(0)
 
+  store    Store      @relation(fields: [storeId], references: [id])
   parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id])
   children Category[] @relation("CategoryTree")
   products Product[]
 
+  @@index([storeId])
   @@map("categories")
 }
 
@@ -538,6 +551,8 @@ model PurchaseOrderItem {
   purchaseOrderId String   @map("purchase_order_id")
   productName     String   @map("product_name")
   sku             String?
+  categoryId      String?  @map("category_id")
+  specs           Json     @default("[]")
   images          String[] @default([])
   quantity        Int
   unitCost        Float    @map("unit_cost")
@@ -590,4 +605,43 @@ model ChannelInventory {
   @@unique([channelId, variantId])
   @@index([variantId])
   @@map("channel_inventory")
+}
+
+model Brand {
+  id       String @id @default(cuid())
+  storeId  String @map("store_id")
+  name     String
+  nameEn   String? @map("name_en")
+  position Int    @default(0)
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("brands")
+}
+
+model UnitOfMeasure {
+  id       String  @id @default(cuid())
+  storeId  String  @map("store_id")
+  name     String
+  nameEn   String? @map("name_en")
+  symbol   String?
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId])
+  @@map("units_of_measure")
+}
+
+model ExchangeRate {
+  id           String @id @default(cuid())
+  storeId      String @map("store_id")
+  fromCurrency String @map("from_currency")
+  toCurrency   String @map("to_currency")
+  rate         Float
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([storeId, fromCurrency, toCurrency])
+  @@map("exchange_rates")
 }

@@ -416,6 +416,17 @@ export default function InventoryPage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-5 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">低库存</p>
+              <p className={`text-2xl font-bold mt-1 ${lowStockCount > 0 ? "text-amber-600" : ""}`}>{lowStockCount}</p>
+            </div>
+            <div className="bg-amber-50 p-3 rounded-xl">
+              <AlertTriangle className="h-6 w-6 text-amber-600" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {lowStockCount > 0 && (

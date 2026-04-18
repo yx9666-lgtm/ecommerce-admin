@@ -64,6 +64,8 @@ interface Warehouse {
 interface POItem {
   productName: string;
   sku: string;
+  categoryId: string;
+  specs: { name: string; value: string }[];
   images: string[];
   quantity: number | "";
   unitCost: number | "";
@@ -98,18 +100,6 @@ const currencies = [
   { code: "GBP", name: "英镑 (GBP)", symbol: "£" },
 ];
 
-const defaultRates: Record<string, number> = {
-  CNY: 1.54,
-  USD: 0.22,
-  MYR: 1,
-  SGD: 0.30,
-  THB: 7.69,
-  IDR: 3571,
-  VND: 5556,
-  EUR: 0.21,
-  GBP: 0.18,
-};
-
 const statusMap: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "草稿", color: "bg-gray-500/15 text-gray-600 dark:text-gray-400" },
   SUBMITTED: { label: "已提交", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
@@ -129,6 +119,8 @@ export default function PurchasingPage() {
   const [pos, setPOs] = useState<PO[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [categories, setCategories] = useState<{ id: string; nameZh: string; nameEn: string }[]>([]);
+  const [dbRates, setDbRates] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -196,7 +188,7 @@ export default function PurchasingPage() {
         notes: (fullPO as any).notes || "",
         purchaseCurrency: fullPO.purchaseCurrency || "CNY",
         localCurrency: fullPO.localCurrency || "MYR",
-        exchangeRate: fullPO.exchangeRate || defaultRates["CNY"],
+        exchangeRate: fullPO.exchangeRate || dbRates["CNY"] || 1,
         shippingCost: (fullPO as any).shippingCost || 0,
         tax: (fullPO as any).tax || 0,
       });
@@ -204,6 +196,8 @@ export default function PurchasingPage() {
         (fullPO.items || []).map((item: any) => ({
           productName: item.productName || "",
           sku: item.sku || "",
+          categoryId: item.categoryId || "",
+          specs: item.specs || [],
           images: item.images || [],
           quantity: item.quantity ?? "",
           unitCost: item.unitCost ?? "",
@@ -233,32 +227,43 @@ export default function PurchasingPage() {
     notes: "",
     purchaseCurrency: "CNY",
     localCurrency: "MYR",
-    exchangeRate: defaultRates["CNY"],
+    exchangeRate: dbRates["CNY"] || 1,
     shippingCost: 0,
     tax: 0,
   });
 
   const [items, setItems] = useState<POItem[]>([
-    { productName: "", sku: "RJ-1001", images: [], quantity: "", unitCost: "" },
+    { productName: "", sku: "RJ-1001", categoryId: "", specs: [], images: [], quantity: "", unitCost: "" },
   ]);
   const [poStats, setPoStats] = useState({ totalSpend: 0, pendingCount: 0, totalPOs: 0 });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [poRes, supRes, whRes] = await Promise.all([
+      const [poRes, supRes, whRes, catRes, rateRes] = await Promise.all([
         fetch("/api/purchasing"),
         fetch("/api/suppliers"),
         fetch("/api/warehouses"),
+        fetch("/api/categories"),
+        fetch("/api/exchange-rates"),
       ]);
-      const [poData, supData, whData] = await Promise.all([
+      const [poData, supData, whData, catData, rateData] = await Promise.all([
         poRes.json(),
         supRes.json(),
         whRes.json(),
+        catRes.json(),
+        rateRes.json(),
       ]);
       const poItems = poData.items || [];
       setPOs(poItems);
       setSuppliers(supData.items || []);
+      setCategories(Array.isArray(catData) ? catData : []);
+      // Build exchange rates lookup from DB
+      const ratesMap: Record<string, number> = {};
+      if (Array.isArray(rateData)) {
+        for (const r of rateData) ratesMap[r.fromCurrency] = r.rate;
+      }
+      setDbRates(ratesMap);
       setWarehouses(whData.items || []);
       setPoStats({
         totalSpend: poData.stats?.totalSpend || 0,
@@ -297,12 +302,12 @@ export default function PurchasingPage() {
   const getAutoSku = (index: number) => `RJ-${nextSkuNum + index}`;
 
   const handleCurrencyChange = (currency: string) => {
-    const rate = defaultRates[currency] || 1;
+    const rate = dbRates[currency] || 1;
     setForm({ ...form, purchaseCurrency: currency, exchangeRate: rate });
   };
 
   const handleAddItem = () =>
-    setItems([...items, { productName: "", sku: getAutoSku(items.length), images: [], quantity: "", unitCost: "" }]);
+    setItems([...items, { productName: "", sku: getAutoSku(items.length), categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
 
   const handleRemoveItem = (i: number) => {
     if (items.length <= 1) return;
@@ -385,12 +390,12 @@ export default function PurchasingPage() {
       notes: "",
       purchaseCurrency: "CNY",
       localCurrency: "MYR",
-      exchangeRate: defaultRates["CNY"],
+      exchangeRate: dbRates["CNY"] || 1,
       shippingCost: 0,
       tax: 0,
     });
     fetchNextSku();
-    setItems([{ productName: "", sku: getAutoSku(0), images: [], quantity: "", unitCost: "" }]);
+    setItems([{ productName: "", sku: getAutoSku(0), categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
   };
 
   const totalSpend = poStats.totalSpend;
@@ -741,18 +746,42 @@ export default function PurchasingPage() {
                     className="bg-muted rounded-xl p-4 border border-border relative group"
                   >
                     <div className="space-y-3">
-                      {/* Details Row */}
+                      {/* Row 1: SKU / 商品名称 / 分类 / 规格 */}
                       <div className="grid grid-cols-12 gap-3 items-start">
-                        <div className="col-span-3 space-y-1">
-                          <Label className="text-[10px] text-muted-foreground">{t("productName")}</Label>
-                          <Input className="h-10" placeholder="商品名称" value={item.productName} onChange={(e) => updateItem(i, "productName", e.target.value)} />
-                        </div>
                         <div className="col-span-2 space-y-1">
                           <Label className="text-[10px] text-muted-foreground">SKU (自动)</Label>
                           <div className="h-10 flex items-center bg-amber-50 rounded-md px-3 border border-amber-100">
                             <span className="font-mono text-sm font-bold text-amber-700">{getAutoSku(i)}</span>
                           </div>
                         </div>
+                        <div className="col-span-4 space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{t("productName")}</Label>
+                          <Input className="h-10" placeholder="商品名称" value={item.productName} onChange={(e) => updateItem(i, "productName", e.target.value)} />
+                        </div>
+                        <div className="col-span-3 space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{t("category")}</Label>
+                          <Select value={item.categoryId || ""} onValueChange={(val) => updateItem(i, "categoryId", val)}>
+                            <SelectTrigger className="h-10">
+                              <SelectValue placeholder={t("selectCategory")} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories.map((cat) => (
+                                <SelectItem key={cat.id} value={cat.id}>{cat.nameZh}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="col-span-3 space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">{t("specs")}</Label>
+                          <Input className="h-10 text-xs" placeholder={t("specValue")} value={(item.specs && item.specs[0]?.value) || ""}
+                            onChange={(e) => {
+                              updateItem(i, "specs", [{ name: "", value: e.target.value }]);
+                            }} />
+                        </div>
+                      </div>
+
+                      {/* Row 2: 数量 / 单价 / 小计 / 商品图片 / 删除 */}
+                      <div className="grid grid-cols-12 gap-3 items-start">
                         <div className="col-span-2 space-y-1">
                           <Label className="text-[10px] text-muted-foreground">{t("quantity")}</Label>
                           <Input type="number" className="h-10 text-center text-base" placeholder="数量" value={item.quantity} onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : parseInt(e.target.value) || 0)} />
@@ -768,62 +797,42 @@ export default function PurchasingPage() {
                             <span className="font-semibold text-xs text-emerald-600">≈ RM {(form.exchangeRate ? ((Number(item.quantity) || 0) * (Number(item.unitCost) || 0) / form.exchangeRate) : 0).toLocaleString("en", { minimumFractionDigits: 2 })}</span>
                           </div>
                         </div>
+                        <div className="col-span-5 space-y-1">
+                          <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <ImagePlus className="h-3 w-3" />
+                            商品图片
+                            {item.images.length > 0 && (
+                              <span className="ml-0.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold">{item.images.length}</span>
+                            )}
+                          </Label>
+                          <div className="flex gap-2 flex-wrap items-center">
+                            {item.images.map((img, imgIdx) => (
+                              <div key={imgIdx} className="relative group/img">
+                                <img src={img} alt="" className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow" />
+                                <button type="button" onClick={() => removeImage(i, imgIdx)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity">×</button>
+                              </div>
+                            ))}
+                            <label className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all group/add flex-shrink-0">
+                              {uploadingIdx === i ? (
+                                <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
+                              ) : (
+                                <>
+                                  <Plus className="h-4 w-4 text-muted-foreground group-hover/add:text-amber-400 transition-colors" />
+                                  <span className="text-[8px] text-muted-foreground group-hover/add:text-amber-600">上传</span>
+                                </>
+                              )}
+                              <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple className="hidden"
+                                onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleImageUpload(i, e.target.files); e.target.value = ""; }} />
+                            </label>
+                            {item.images.length === 0 && (
+                              <span className="text-[10px] text-muted-foreground ml-1">JPG/PNG/WebP</span>
+                            )}
+                          </div>
+                        </div>
                         <div className="col-span-1 flex items-center pt-4">
                           <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-red-500 hover:bg-red-50" onClick={() => handleRemoveItem(i)} disabled={items.length <= 1}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        </div>
-                      </div>
-
-                      {/* Images Row - Multi Upload */}
-                      <div>
-                        <Label className="text-[10px] text-muted-foreground mb-1.5 block flex items-center gap-1">
-                          <ImagePlus className="h-3 w-3" />
-                          商品图片
-                          {item.images.length > 0 && (
-                            <span className="ml-0.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold">{item.images.length}</span>
-                          )}
-                        </Label>
-                        <div className="flex gap-2 flex-wrap items-center">
-                          {item.images.map((img, imgIdx) => (
-                            <div key={imgIdx} className="relative group/img">
-                              <img
-                                src={img}
-                                alt=""
-                                className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeImage(i, imgIdx)}
-                                className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                          <label className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all group/add flex-shrink-0">
-                            {uploadingIdx === i ? (
-                              <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
-                            ) : (
-                              <>
-                                <Plus className="h-4 w-4 text-muted-foreground group-hover/add:text-amber-400 transition-colors" />
-                                <span className="text-[8px] text-muted-foreground group-hover/add:text-amber-600">上传</span>
-                              </>
-                            )}
-                            <input
-                              type="file"
-                              accept="image/jpeg,image/png,image/gif,image/webp"
-                              multiple
-                              className="hidden"
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files.length > 0) handleImageUpload(i, e.target.files);
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
-                          {item.images.length === 0 && (
-                            <span className="text-[10px] text-muted-foreground ml-1">支持 JPG/PNG/WebP，可一次选多张</span>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -943,7 +952,7 @@ export default function PurchasingPage() {
 
       {/* View PO Detail Dialog */}
       <Dialog open={!!viewPO} onOpenChange={(open) => { if (!open) { setViewPO(null); setDefectEditing(false); } }}>
-        <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-7xl max-h-[95vh] overflow-y-auto p-0">
           {viewPO && (() => {
             const st = statusMap[viewPO.status] || statusMap.DRAFT;
             const vSymbol = getCurrencySymbol(viewPO.purchaseCurrency);
@@ -1043,18 +1052,20 @@ export default function PurchasingPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>商品名称</TableHead>
-                          <TableHead>SKU</TableHead>
-                          <TableHead>图片</TableHead>
-                          <TableHead>数量</TableHead>
-                          <TableHead>单价 ({vSymbol})</TableHead>
-                          <TableHead>小计 ({vSymbol})</TableHead>
-                          <TableHead>单价 (RM)</TableHead>
-                          <TableHead>≈ MYR</TableHead>
-                          <TableHead className="text-center text-red-600">坏品</TableHead>
-                          {!defectEditing && <TableHead>坏品备注</TableHead>}
-                          {defectEditing && <TableHead>坏品备注</TableHead>}
-                          <TableHead className="text-red-600">退货金额</TableHead>
+                          <TableHead className="whitespace-nowrap">商品名称</TableHead>
+                          <TableHead className="whitespace-nowrap">SKU</TableHead>
+                          <TableHead className="whitespace-nowrap">图片</TableHead>
+                          <TableHead className="whitespace-nowrap">分类</TableHead>
+                          <TableHead className="whitespace-nowrap">规格</TableHead>
+                          <TableHead className="whitespace-nowrap">数量</TableHead>
+                          <TableHead className="whitespace-nowrap">单价 ({vSymbol})</TableHead>
+                          <TableHead className="whitespace-nowrap">小计 ({vSymbol})</TableHead>
+                          <TableHead className="whitespace-nowrap">单价 (RM)</TableHead>
+                          <TableHead className="whitespace-nowrap">≈ MYR</TableHead>
+                          <TableHead className="whitespace-nowrap text-center text-red-600">坏品</TableHead>
+                          {!defectEditing && <TableHead className="whitespace-nowrap">坏品备注</TableHead>}
+                          {defectEditing && <TableHead className="whitespace-nowrap">坏品备注</TableHead>}
+                          <TableHead className="whitespace-nowrap text-red-600">退货金额</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1064,7 +1075,7 @@ export default function PurchasingPage() {
                           return (
                             <TableRow key={item.id} className={dq > 0 ? "bg-red-50/50" : ""}>
                               <TableCell className="text-sm">{item.productName}</TableCell>
-                              <TableCell className="font-mono text-sm">{item.sku || "-"}</TableCell>
+                              <TableCell className="font-mono text-sm whitespace-nowrap">{item.sku || "-"}</TableCell>
                               <TableCell>
                                 <div className="flex gap-1 justify-center">
                                   {(item.images || []).slice(0, 3).map((img: string, i: number) => (
@@ -1073,6 +1084,12 @@ export default function PurchasingPage() {
                                   {(item.images || []).length > 3 && <span className="text-xs text-muted-foreground self-center">+{item.images.length - 3}</span>}
                                   {(!item.images || item.images.length === 0) && <span className="text-xs text-muted-foreground">-</span>}
                                 </div>
+                              </TableCell>
+                              <TableCell className="text-sm whitespace-nowrap">{item.categoryId ? (categories.find(c => c.id === item.categoryId)?.nameZh || "-") : "-"}</TableCell>
+                              <TableCell className="text-xs whitespace-nowrap">
+                                {(item.specs && Array.isArray(item.specs) && item.specs.length > 0)
+                                  ? item.specs.map((s: any) => `${s.name}/${s.value}`).join(", ")
+                                  : "-"}
                               </TableCell>
                               <TableCell className="text-sm">{item.quantity}</TableCell>
                               <TableCell className="text-sm">{vSymbol} {item.unitCost?.toLocaleString("en", { minimumFractionDigits: 2 })}</TableCell>

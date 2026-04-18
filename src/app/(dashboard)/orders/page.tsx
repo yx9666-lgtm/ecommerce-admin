@@ -156,8 +156,6 @@ export default function OrdersPage() {
 
   const [newChannelId, setNewChannelId] = useState("");
   const [newOrderId, setNewOrderId] = useState("");
-  const [newCustomerName, setNewCustomerName] = useState("");
-  const [newCustomerPhone, setNewCustomerPhone] = useState("");
   const [newShippingFee, setNewShippingFee] = useState("");
   const [newDiscount, setNewDiscount] = useState("");
   const [newBuyerNote, setNewBuyerNote] = useState("");
@@ -169,8 +167,6 @@ export default function OrdersPage() {
   // Edit form state
   const [editChannelId, setEditChannelId] = useState("");
   const [editOrderId, setEditOrderId] = useState("");
-  const [editCustomerName, setEditCustomerName] = useState("");
-  const [editCustomerPhone, setEditCustomerPhone] = useState("");
   const [editShippingFee, setEditShippingFee] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
   const [editBuyerNote, setEditBuyerNote] = useState("");
@@ -302,8 +298,6 @@ export default function OrdersPage() {
   const resetCreateForm = () => {
     setNewChannelId("");
     setNewOrderId("");
-    setNewCustomerName("");
-    setNewCustomerPhone("");
     setNewShippingFee("");
     setNewDiscount("");
     setNewBuyerNote("");
@@ -332,8 +326,6 @@ export default function OrdersPage() {
         body: JSON.stringify({
           channelId: newChannelId,
           platformOrderId: newOrderId,
-          customerName: newCustomerName || undefined,
-          customerPhone: newCustomerPhone || undefined,
           shippingFee: parseFloat(newShippingFee) || 0,
           discount: parseFloat(newDiscount) || 0,
           buyerNote: newBuyerNote || undefined,
@@ -396,8 +388,6 @@ export default function OrdersPage() {
   const openEditDialog = (order: Order) => {
     setEditChannelId(order.channelId || "");
     setEditOrderId(order.platformOrderId);
-    setEditCustomerName(order.customer?.name || "");
-    setEditCustomerPhone(order.customer?.phone || "");
     setEditShippingFee(order.shippingFee ? String(order.shippingFee) : "");
     setEditDiscount(order.discount ? String(order.discount) : "");
     setEditBuyerNote(order.buyerNote || "");
@@ -437,8 +427,6 @@ export default function OrdersPage() {
           channelId: editChannelId || undefined,
           platformOrderId: editOrderId || undefined,
           status: editOrderStatus,
-          customerName: editCustomerName || undefined,
-          customerPhone: editCustomerPhone || undefined,
           shippingFee: parseFloat(editShippingFee) || 0,
           discount: parseFloat(editDiscount) || 0,
           buyerNote: editBuyerNote || undefined,
@@ -919,9 +907,6 @@ export default function OrdersPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t("channelUserNameHint")}
-                </p>
               </div>
               <div className="space-y-2">
                 <Label>{t("channelOrderId")} *</Label>
@@ -929,25 +914,6 @@ export default function OrdersPage() {
                   placeholder={t("channelOrderIdPlaceholder")}
                   value={newOrderId}
                   onChange={(e) => setNewOrderId(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t("customer")}</Label>
-                <Input
-                  placeholder={t("customerName")}
-                  value={newCustomerName}
-                  onChange={(e) => setNewCustomerName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{t("phone")}</Label>
-                <Input
-                  placeholder="+60..."
-                  value={newCustomerPhone}
-                  onChange={(e) => setNewCustomerPhone(e.target.value)}
                 />
               </div>
             </div>
@@ -1201,25 +1167,6 @@ export default function OrdersPage() {
                   placeholder={t("channelOrderIdPlaceholder")}
                   value={editOrderId}
                   onChange={(e) => setEditOrderId(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>{t("customer")}</Label>
-                <Input
-                  placeholder={t("customerName")}
-                  value={editCustomerName}
-                  onChange={(e) => setEditCustomerName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{t("phone")}</Label>
-                <Input
-                  placeholder="+60..."
-                  value={editCustomerPhone}
-                  onChange={(e) => setEditCustomerPhone(e.target.value)}
                 />
               </div>
             </div>

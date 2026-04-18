@@ -47,18 +47,23 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 });
 
 async function generateSupplierNo(storeId: string): Promise<string> {
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { supplierStartNo: true } });
+  const startStr = store?.supplierStartNo || "001";
+  const startNum = parseInt(startStr, 10) || 1;
+  const padLen = startStr.length;
+
   const latest = await prisma.supplier.findFirst({
-    where: { storeId, supplierNo: { startsWith: "SUP-" } },
+    where: { storeId },
     orderBy: { supplierNo: "desc" },
     select: { supplierNo: true },
   });
 
-  if (!latest || !latest.supplierNo) return "SUP-001";
+  if (!latest || !latest.supplierNo) return String(startNum).padStart(padLen, "0");
 
-  const num = parseInt(latest.supplierNo.replace("SUP-", ""), 10);
-  if (isNaN(num)) return "SUP-001";
+  const num = parseInt(latest.supplierNo, 10);
+  if (isNaN(num)) return String(startNum).padStart(padLen, "0");
 
-  return `SUP-${String(num + 1).padStart(3, "0")}`;
+  return String(num + 1).padStart(padLen, "0");
 }
 
 export const POST = withTryCatch(async (req: NextRequest) => {
