@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 // ─── GET: recent login logs for users in the current store ──────────────────
 
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   // Get all user IDs linked to this store

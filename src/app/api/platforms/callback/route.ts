@@ -24,6 +24,11 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     return NextResponse.redirect(new URL("/platforms?error=invalid_connection", req.url));
   }
 
+  // Verify the platform matches the connection to prevent CSRF
+  if (connection.platform.toLowerCase() !== platform.toLowerCase()) {
+    return NextResponse.redirect(new URL("/platforms?error=platform_mismatch", req.url));
+  }
+
   const envPrefix = platform.toUpperCase();
   const adapter = createPlatformAdapter(platform as PlatformType, {
     appKey: process.env[`${envPrefix}_APP_KEY`] || process.env[`${envPrefix}_PARTNER_ID`] || "",

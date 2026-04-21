@@ -113,7 +113,7 @@ export default function WarehousesPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card><CardContent className="p-5 flex items-center justify-between">
           <div><p className="text-sm text-muted-foreground">{t("totalWarehouses")}</p><p className="text-2xl font-bold mt-1">{warehouses.length}</p></div>
-          <div className="bg-amber-50 dark:bg-amber-500/15 p-3 rounded-xl"><Container className="h-6 w-6 text-amber-700" /></div>
+          <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl"><Container className="h-6 w-6 text-gold-700" /></div>
         </CardContent></Card>
         <Card><CardContent className="p-5 flex items-center justify-between">
           <div><p className="text-sm text-muted-foreground">{t("defaultWarehouse")}</p><p className="text-2xl font-bold mt-1">{defaultWarehouse?.name || "-"}</p></div>
@@ -134,7 +134,7 @@ export default function WarehousesPage() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-amber-700" /></div>
+            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-gold-700" /></div>
           ) : warehouses.length === 0 ? (
             <div className="text-center py-16">
               <Container className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -157,7 +157,7 @@ export default function WarehousesPage() {
                     <TableCell className="text-sm max-w-[250px] truncate">{w.address || "-"}</TableCell>
                     <TableCell>
                       {w.isDefault ? (
-                        <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 dark:bg-amber-500/15 px-2 py-0.5 rounded-full">
+                        <span className="inline-flex items-center gap-1 text-xs font-medium text-gold-600 bg-gold-50 dark:bg-gold-400/15 px-2 py-0.5 rounded-full">
                           <Star className="h-3 w-3" />{t("isDefault")}
                         </span>
                       ) : "-"}
@@ -170,7 +170,7 @@ export default function WarehousesPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => openEdit(w)}>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => openEdit(w)}>
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => openDelete(w)}>
@@ -189,12 +189,12 @@ export default function WarehousesPage() {
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md p-0 gap-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3.5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-5 py-3.5 text-white rounded-t-lg">
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <Container className="h-4 w-4" />
               {editingId ? t("editWarehouse") : t("addWarehouse")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 text-xs mt-0.5">
+            <DialogDescription className="text-gold-200 text-xs mt-0.5">
               {editingId ? t("editInfo") : t("addInfo")}
             </DialogDescription>
           </div>
@@ -214,7 +214,7 @@ export default function WarehousesPage() {
                 id="isDefault"
                 checked={form.isDefault}
                 onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-                className="h-4 w-4 rounded border-border accent-amber-600"
+                className="h-4 w-4 rounded border-border accent-gold-600"
               />
               <Label htmlFor="isDefault" className="text-sm cursor-pointer">{t("isDefault")}</Label>
             </div>

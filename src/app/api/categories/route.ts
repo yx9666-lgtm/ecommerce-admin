@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 export const GET = withTryCatch(async (_req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const categories = await prisma.category.findMany({
@@ -26,6 +29,8 @@ const createCategorySchema = z.object({
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, createCategorySchema);

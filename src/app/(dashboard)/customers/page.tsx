@@ -102,7 +102,7 @@ export default function CustomersPage() {
   const customerStats = [
     { key: "total", value: stats.total, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
     { key: "new", value: stats.new, icon: UserPlus, color: "text-emerald-600", bg: "bg-emerald-50" },
-    { key: "vip", value: stats.vip, icon: Star, color: "text-amber-600", bg: "bg-amber-50" },
+    { key: "vip", value: stats.vip, icon: Star, color: "text-gold-600", bg: "bg-gold-50" },
     { key: "dormant", value: stats.dormant, icon: Clock, color: "text-red-600", bg: "bg-red-50" },
   ];
 
@@ -196,7 +196,7 @@ export default function CustomersPage() {
                     <TableCell>
                       <div className="flex items-center justify-center gap-2">
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs bg-amber-500/15 text-amber-600 dark:text-amber-400">{customer.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</AvatarFallback>
+                          <AvatarFallback className="text-xs bg-gold-400/15 text-gold-600 dark:text-gold-400">{customer.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</AvatarFallback>
                         </Avatar>
                         <span className="font-medium text-sm">{customer.name}</span>
                       </div>
@@ -243,12 +243,12 @@ export default function CustomersPage() {
       {/* Customer Detail Dialog */}
       <Dialog open={!!selectedCustomer} onOpenChange={() => setSelectedCustomer(null)}>
         <DialogContent className="max-w-lg p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Users className="h-5 w-5" />
               {t("customerDetail")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               {selectedCustomer?.email}
             </DialogDescription>
           </div>
@@ -257,7 +257,7 @@ export default function CustomersPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarFallback className="text-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  <AvatarFallback className="text-lg bg-gold-400/15 text-gold-600 dark:text-gold-400">
                     {selectedCustomer.name.split(" ").map(n => n[0]).join("").slice(0, 2)}
                   </AvatarFallback>
                 </Avatar>

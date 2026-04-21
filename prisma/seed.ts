@@ -1,18 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import crypto from "crypto";
 
 const prisma = new PrismaClient();
-
-function generatePassword(): string {
-  return crypto.randomBytes(16).toString("base64url");
-}
 
 async function main() {
   console.log("Seeding database...");
 
-  const adminPassword = process.env.ADMIN_PASSWORD || generatePassword();
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
   const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+  const existingAdmin = await prisma.user.findUnique({ where: { username: "admin" } });
 
   const admin = await prisma.user.upsert({
     where: { username: "admin" },
@@ -79,8 +76,11 @@ async function main() {
   }
 
   console.log("Seed completed!");
-  console.log(`Admin login: admin / ${adminPassword}`);
-  console.log("IMPORTANT: Save this password — it will not be shown again.");
+  if (existingAdmin) {
+    console.log("Admin user already exists — password unchanged.");
+  } else {
+    console.log(`Admin login: admin / ${adminPassword}`);
+  }
 }
 
 main()

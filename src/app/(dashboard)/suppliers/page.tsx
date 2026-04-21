@@ -125,7 +125,7 @@ export default function SuppliersPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card><CardContent className="p-5 flex items-center justify-between">
           <div><p className="text-sm text-muted-foreground">{t("totalSuppliers")}</p><p className="text-2xl font-bold mt-1">{suppliers.length}</p></div>
-          <div className="bg-amber-50 dark:bg-amber-500/15 p-3 rounded-xl"><Building2 className="h-6 w-6 text-amber-700" /></div>
+          <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl"><Building2 className="h-6 w-6 text-gold-700" /></div>
         </CardContent></Card>
         <Card><CardContent className="p-5 flex items-center justify-between">
           <div><p className="text-sm text-muted-foreground">{t("activeSuppliers")}</p><p className="text-2xl font-bold mt-1">{suppliers.filter((s) => s.isActive).length}</p></div>
@@ -146,7 +146,7 @@ export default function SuppliersPage() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-amber-700" /></div>
+            <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-gold-700" /></div>
           ) : filtered.length === 0 ? (
             <div className="text-center py-16">
               <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
@@ -185,7 +185,7 @@ export default function SuppliersPage() {
                       <TableCell className="text-sm">{s.country}</TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => openEdit(s)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => openEdit(s)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => openDelete(s)}>
@@ -205,12 +205,12 @@ export default function SuppliersPage() {
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-md p-0 gap-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-5 py-3.5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-5 py-3.5 text-white rounded-t-lg">
             <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
               <Building2 className="h-4 w-4" />
               {editingId ? "编辑供应商" : t("addSupplier")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 text-xs mt-0.5">
+            <DialogDescription className="text-gold-200 text-xs mt-0.5">
               {editingId ? "修改供应商信息" : <>编号：<span className="font-mono font-bold text-white">{nextNo}</span></>}
             </DialogDescription>
           </div>
@@ -220,9 +220,9 @@ export default function SuppliersPage() {
               <div className="grid grid-cols-5 gap-3">
                 <div className="col-span-2 space-y-1">
                   <Label className="text-[11px] text-muted-foreground">供应商编号</Label>
-                  <div className="h-9 flex items-center bg-amber-50 rounded-md px-2.5 border border-amber-100">
-                    <Hash className="h-3.5 w-3.5 text-amber-600 mr-1.5" />
-                    <span className="font-mono text-sm font-bold text-amber-700">{nextNo}</span>
+                  <div className="h-9 flex items-center bg-gold-50 rounded-md px-2.5 border border-gold-100">
+                    <Hash className="h-3.5 w-3.5 text-gold-600 mr-1.5" />
+                    <span className="font-mono text-sm font-bold text-gold-700">{nextNo}</span>
                   </div>
                 </div>
                 <div className="col-span-3 space-y-1">

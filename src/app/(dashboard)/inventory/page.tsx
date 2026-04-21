@@ -109,7 +109,7 @@ interface ChannelInfo {
 
 const statusColors: Record<string, string> = {
   normal: "text-emerald-600",
-  low: "text-amber-600",
+  low: "text-gold-600",
   critical: "text-red-600",
   out: "text-red-700",
 };
@@ -118,7 +118,7 @@ const typeIcons: Record<string, { icon: any; color: string; label: string }> = {
   INBOUND: { icon: ArrowDown, color: "text-emerald-600 bg-emerald-50", label: "入库" },
   OUTBOUND: { icon: ArrowUp, color: "text-red-600 bg-red-50", label: "出库" },
   TRANSFER: { icon: ArrowLeftRight, color: "text-blue-600 bg-blue-50", label: "调拨" },
-  ADJUSTMENT: { icon: ClipboardCheck, color: "text-amber-600 bg-amber-50", label: "调整" },
+  ADJUSTMENT: { icon: ClipboardCheck, color: "text-gold-600 bg-gold-50", label: "调整" },
   STOCKTAKE: { icon: ClipboardCheck, color: "text-purple-600 bg-purple-50", label: "盘点" },
 };
 
@@ -376,8 +376,8 @@ export default function InventoryPage() {
             <CardContent className="p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-amber-50 rounded-lg">
-                    <WarehouseIcon className="h-5 w-5 text-amber-700" />
+                  <div className="p-2 bg-gold-50 rounded-lg">
+                    <WarehouseIcon className="h-5 w-5 text-gold-700" />
                   </div>
                   <div>
                     <p className="font-medium text-sm">{wh.name}</p>
@@ -388,7 +388,7 @@ export default function InventoryPage() {
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">商品种类</span>
-                  <span className="font-semibold">{stockItems.length}</span>
+                  <span className="font-semibold">{stockTotal}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{t("currentStock")}</span>
@@ -420,20 +420,20 @@ export default function InventoryPage() {
           <CardContent className="p-5 flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">低库存</p>
-              <p className={`text-2xl font-bold mt-1 ${lowStockCount > 0 ? "text-amber-600" : ""}`}>{lowStockCount}</p>
+              <p className={`text-2xl font-bold mt-1 ${lowStockCount > 0 ? "text-gold-600" : ""}`}>{lowStockCount}</p>
             </div>
-            <div className="bg-amber-50 p-3 rounded-xl">
-              <AlertTriangle className="h-6 w-6 text-amber-600" />
+            <div className="bg-gold-50 p-3 rounded-xl">
+              <AlertTriangle className="h-6 w-6 text-gold-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
       {lowStockCount > 0 && (
-        <Card className="border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-500/10">
+        <Card className="border-gold-200 dark:border-gold-500/30 bg-gold-50/50 dark:bg-gold-400/10">
           <CardContent className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-amber-600" />
-            <span className="text-sm font-medium text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-5 w-5 text-gold-600" />
+            <span className="text-sm font-medium text-gold-600 dark:text-gold-400">
               {lowStockCount} {t("lowStockAlert")}
             </span>
           </CardContent>
@@ -470,7 +470,7 @@ export default function InventoryPage() {
               </div>
               {loading ? (
                 <div className="flex justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-amber-700" />
+                  <Loader2 className="h-6 w-6 animate-spin text-gold-700" />
                 </div>
               ) : stockItems.length === 0 ? (
                 <div className="text-center py-16">
@@ -585,7 +585,7 @@ export default function InventoryPage() {
             <CardContent className="p-0">
               {loading ? (
                 <div className="flex justify-center py-16">
-                  <Loader2 className="h-6 w-6 animate-spin text-amber-700" />
+                  <Loader2 className="h-6 w-6 animate-spin text-gold-700" />
                 </div>
               ) : movements.length === 0 ? (
                 <div className="text-center py-16">
@@ -861,13 +861,13 @@ export default function InventoryPage() {
         }}
       >
         <DialogContent className="max-w-2xl p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <ArrowRightLeft className="h-5 w-5" />
               {t("allocateToChannel")}
             </DialogTitle>
             {transferProduct && (
-              <DialogDescription className="text-amber-200 mt-1">
+              <DialogDescription className="text-gold-200 mt-1">
                 {transferProduct.name} · <span className="font-mono">{transferProduct.sku}</span> · {t("totalWarehouseStock")}: <span className="font-semibold text-white">{transferProduct.stock}</span>
               </DialogDescription>
             )}

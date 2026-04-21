@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch, assertStoreOwnership } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const updateOrderItemSchema = z.object({
   name: z.string().optional(),
@@ -28,6 +29,8 @@ const updateOrderSchema = z.object({
 export const PUT = withTryCatch(async (req: NextRequest, context) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.orders.edit);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { id } = context!.params;
@@ -104,6 +107,8 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
 export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.orders.delete);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { id } = context!.params;

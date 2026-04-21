@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import logger from "@/lib/logger";
+import prisma from "@/lib/db";
+import type { PermissionMap } from "@/lib/permissions";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -11,23 +13,48 @@ export type AuthContext = {
   storeId: string;
   userId: string;
   role: string;
+  permissions: PermissionMap;
 };
 
 // ─── Auth Context ────────────────────────────────────────────────────────────
 
 /**
  * Get authenticated session and extract storeId from the JWT — never from the client.
+ * Supports multi-store: if x-store-id header is provided and matches a user's store, use it.
  * Returns a NextResponse (401/400) on failure, or an AuthContext on success.
  */
-export async function getAuthContext(): Promise<AuthContext | NextResponse> {
+export async function getAuthContext(req?: NextRequest): Promise<AuthContext | NextResponse> {
   const session = await getServerSession(authOptions);
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const storeId = session.user.stores?.[0]?.id;
+  const stores = session.user.stores || [];
+  if (stores.length === 0) {
+    return NextResponse.json({ error: "No store associated" }, { status: 400 });
+  }
+
+  // Allow store selection via header for multi-store users
+  let storeId = stores[0]?.id;
+  if (req) {
+    const requestedStoreId = req.headers.get("x-store-id");
+    if (requestedStoreId && stores.some((s: any) => s.id === requestedStoreId)) {
+      storeId = requestedStoreId;
+    }
+  }
+
   if (!storeId) {
     return NextResponse.json({ error: "No store associated" }, { status: 400 });
+  }
+
+  // Load per-user permissions from StoreUser
+  let permissions: PermissionMap = {};
+  if (session.user.role !== "SUPER_ADMIN") {
+    const storeUser = await prisma.storeUser.findUnique({
+      where: { storeId_userId: { storeId, userId: session.user.id } },
+      select: { permissions: true },
+    });
+    permissions = (storeUser?.permissions as PermissionMap) || {};
   }
 
   return {
@@ -35,6 +62,7 @@ export async function getAuthContext(): Promise<AuthContext | NextResponse> {
     storeId,
     userId: session.user.id,
     role: session.user.role,
+    permissions,
   };
 }
 

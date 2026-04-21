@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const CATEGORY_COLORS = [
   "#D97706", "#06B6D4", "#10B981", "#F59E0B", "#6B7280",
@@ -42,6 +43,8 @@ const PLATFORMS = ["SHOPEE", "LAZADA", "TIKTOK", "PGMALL"] as const;
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.analytics.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, withTryCatch, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const createSupplierSchema = z.object({
   name: z.string().min(1),
@@ -17,6 +18,8 @@ const createSupplierSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.suppliers.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);
@@ -69,6 +72,8 @@ async function generateSupplierNo(storeId: string): Promise<string> {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.suppliers.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, createSupplierSchema);

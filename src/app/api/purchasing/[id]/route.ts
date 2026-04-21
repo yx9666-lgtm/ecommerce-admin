@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, withTryCatch, assertStoreOwnership, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const purchaseOrderItemSchema = z.object({
   productName: z.string().min(1),
@@ -39,6 +40,8 @@ export const GET = withTryCatch(async (_req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.purchasing.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const po = await prisma.purchaseOrder.findUnique({
@@ -63,6 +66,8 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.purchasing.edit);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   // IDOR check
@@ -158,6 +163,8 @@ export const PATCH = withTryCatch(async (req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.purchasing.edit);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   // IDOR check
@@ -210,12 +217,72 @@ export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.purchasing.delete);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   // IDOR check
-  const existing = await prisma.purchaseOrder.findUnique({ where: { id }, select: { storeId: true } });
+  const existing = await prisma.purchaseOrder.findUnique({
+    where: { id },
+    select: { storeId: true, poNumber: true, exchangeRate: true },
+
+  });
   const ownershipError = assertStoreOwnership(existing?.storeId, storeId);
   if (ownershipError) return ownershipError;
+
+  // Fetch items to rollback inventory
+  const items = await prisma.purchaseOrderItem.findMany({
+    where: { purchaseOrderId: id },
+    select: { sku: true, quantity: true },
+  });
+
+  // Rollback product stock for each SKU
+  const skus = items.map((i) => i.sku).filter((s): s is string => s !== null);
+  if (skus.length > 0) {
+    const products = await prisma.product.findMany({
+      where: { storeId, sku: { in: skus } },
+      select: { id: true, sku: true },
+    });
+    const productMap = new Map(products.map((p) => [p.sku, p.id]));
+
+    const ops: any[] = [];
+    for (const item of items) {
+      const productId = item.sku ? productMap.get(item.sku) : undefined;
+      if (productId && item.quantity > 0) {
+        ops.push(
+          prisma.product.update({
+            where: { id: productId },
+            data: { totalStock: { decrement: item.quantity } },
+          })
+        );
+      }
+    }
+
+    // Create outbound inventory actions for audit trail
+    const warehouse = await prisma.warehouse.findFirst({ where: { storeId } });
+    if (warehouse) {
+      for (const item of items) {
+        if (item.quantity > 0) {
+          ops.push(
+            prisma.inventoryAction.create({
+              data: {
+                warehouseId: warehouse.id,
+                type: "OUTBOUND",
+                variantSku: item.sku || "",
+                quantity: -item.quantity,
+                operator: "System",
+                note: `采购单删除回滚 ${existing!.poNumber}`,
+              },
+            })
+          );
+        }
+      }
+    }
+
+    if (ops.length > 0) {
+      await prisma.$transaction(ops);
+    }
+  }
 
   await prisma.purchaseOrder.delete({ where: { id } });
   return NextResponse.json({ success: true });

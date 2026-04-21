@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/auth-store";
+import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from "@/lib/permissions";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Settings,
   Users,
@@ -43,7 +45,7 @@ const roleColors: Record<string, string> = {
   STORE_ADMIN: "bg-purple-500/15 text-purple-600 dark:text-purple-400",
   OPERATOR: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   CUSTOMER_SERVICE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  FINANCE: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  FINANCE: "bg-gold-400/15 text-gold-600 dark:text-gold-400",
 };
 
 const roleLabelKeys: Record<string, string> = {
@@ -186,13 +188,14 @@ export default function SettingsPage() {
   // ── Low stock threshold ──
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
 
-  // ── Add-user dialog state ──
+  // ── Add/Edit-user dialog state ──
   const [showUserDialog, setShowUserDialog] = useState(false);
-  const [newUser, setNewUser] = useState({ displayName: "", username: "", email: "", password: "", role: "" });
+  const [editingUser, setEditingUser] = useState<UserItem | null>(null);
+  const [newUser, setNewUser] = useState({ displayName: "", username: "", password: "", role: "" });
   const [userSaving, setUserSaving] = useState(false);
   const [userMsg, setUserMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // ── Notifications (local only) ──
+  // ── Notifications ──
   const [notifications, setNotifications] = useState({
     email: true,
     lowStock: true,
@@ -200,6 +203,15 @@ export default function SettingsPage() {
     syncError: true,
     refund: false,
   });
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
+
+  // ── Permissions dialog state ──
+  const [showPermDialog, setShowPermDialog] = useState(false);
+  const [permUser, setPermUser] = useState<UserItem | null>(null);
+  const [permMap, setPermMap] = useState<Record<string, boolean>>({});
+  const [permLoading, setPermLoading] = useState(false);
+  const [permSaving, setPermSaving] = useState(false);
 
   // ── Fetch helpers ──
 
@@ -300,6 +312,36 @@ export default function SettingsPage() {
     }
   }, []);
 
+  const fetchNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    try {
+      const res = await fetch("/api/settings/notifications");
+      if (res.ok) setNotifications(await res.json());
+    } catch {
+      // silent
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  const saveNotification = async (key: string, checked: boolean) => {
+    const updated = { ...notifications, [key]: checked };
+    setNotifications(updated);
+    setNotificationsSaving(true);
+    try {
+      await fetch("/api/settings/notifications", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: checked }),
+      });
+    } catch {
+      // revert on error
+      setNotifications(notifications);
+    } finally {
+      setNotificationsSaving(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchStore();
@@ -308,7 +350,8 @@ export default function SettingsPage() {
     fetchBrands();
     fetchUnits();
     fetchExchangeRates();
-  }, [fetchUsers, fetchStore, fetchLogs, fetchCategories, fetchBrands, fetchUnits, fetchExchangeRates]);
+    fetchNotifications();
+  }, [fetchUsers, fetchStore, fetchLogs, fetchCategories, fetchBrands, fetchUnits, fetchExchangeRates, fetchNotifications]);
 
   // ── Handlers ──
 
@@ -351,14 +394,20 @@ export default function SettingsPage() {
     setUserSaving(true);
     setUserMsg(null);
     try {
-      const res = await fetch("/api/settings/users", {
-        method: "POST",
+      const isEditing = !!editingUser;
+      const url = isEditing ? `/api/settings/users/${editingUser!.id}` : "/api/settings/users";
+      const method = isEditing ? "PUT" : "POST";
+      const payload: any = { ...newUser };
+      if (isEditing && !payload.password) delete payload.password;
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newUser),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
-        setUserMsg({ type: "success", text: t("userCreated") });
-        setNewUser({ displayName: "", username: "", email: "", password: "", role: "" });
+        setUserMsg({ type: "success", text: isEditing ? t("userSaved") : t("userCreated") });
+        setNewUser({ displayName: "", username: "", password: "", role: "" });
+        setEditingUser(null);
         fetchUsers();
         setTimeout(() => setShowUserDialog(false), 1200);
       } else {
@@ -372,6 +421,92 @@ export default function SettingsPage() {
       setUserMsg({ type: "error", text: t("networkError") });
     } finally {
       setUserSaving(false);
+    }
+  };
+
+  const openEditUser = (user: UserItem) => {
+    setEditingUser(user);
+    setNewUser({
+      displayName: user.displayName || "",
+      username: user.username,
+      password: "",
+      role: user.role,
+    });
+    setUserMsg(null);
+    setShowUserDialog(true);
+  };
+
+  const handleDeleteUser = async (user: UserItem) => {
+    if (!confirm(t("confirmDeleteUser"))) return;
+    try {
+      const res = await fetch(`/api/settings/users/${user.id}`, { method: "DELETE" });
+      if (res.ok) fetchUsers();
+    } catch {
+      // silent
+    }
+  };
+
+  const openPermissions = async (user: UserItem) => {
+    setPermUser(user);
+    setPermMap({});
+    setShowPermDialog(true);
+    setPermLoading(true);
+    try {
+      const res = await fetch(`/api/settings/users/${user.id}/permissions`);
+      if (res.ok) {
+        const data = await res.json();
+        setPermMap(data.permissions || {});
+      }
+    } catch {
+      // silent
+    } finally {
+      setPermLoading(false);
+    }
+  };
+
+  const togglePerm = (key: string) => {
+    setPermMap((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleAllRow = (module: string, actions: string[]) => {
+    const keys = actions.map((a) => `${module}.${a}`);
+    const allChecked = keys.every((k) => permMap[k]);
+    const updated = { ...permMap };
+    keys.forEach((k) => { updated[k] = !allChecked; });
+    setPermMap(updated);
+  };
+
+  const toggleAllColumn = (action: string) => {
+    const keys = PERMISSION_GROUPS.filter((g) => g.actions.includes(action as any)).map((g) => `${g.module}.${action}`);
+    const allChecked = keys.every((k) => permMap[k]);
+    const updated = { ...permMap };
+    keys.forEach((k) => { updated[k] = !allChecked; });
+    setPermMap(updated);
+  };
+
+  const toggleSelectAll = () => {
+    const allChecked = ALL_PERMISSION_KEYS.every((k) => permMap[k]);
+    const updated: Record<string, boolean> = {};
+    ALL_PERMISSION_KEYS.forEach((k) => { updated[k] = !allChecked; });
+    setPermMap(updated);
+  };
+
+  const handleSavePermissions = async () => {
+    if (!permUser) return;
+    setPermSaving(true);
+    try {
+      const res = await fetch(`/api/settings/users/${permUser.id}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: permMap }),
+      });
+      if (res.ok) {
+        setShowPermDialog(false);
+      }
+    } catch {
+      // silent
+    } finally {
+      setPermSaving(false);
     }
   };
 
@@ -692,7 +827,7 @@ export default function SettingsPage() {
                     <h3 className="text-sm font-semibold mb-1">{t("lowStockThreshold")}</h3>
                     <p className="text-xs text-muted-foreground mb-3">{t("lowStockThresholdDesc")}</p>
                     <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <AlertTriangle className="h-4 w-4 text-gold-500" />
                       <Input
                         type="number"
                         min={0}
@@ -743,7 +878,7 @@ export default function SettingsPage() {
                 <CardTitle>{t("users")}</CardTitle>
                 <CardDescription>{t("usersDesc")}</CardDescription>
               </div>
-              <Button size="sm" className="gap-1" onClick={() => { setShowUserDialog(true); setUserMsg(null); }}><Plus className="h-4 w-4" />{t("addUser")}</Button>
+              <Button size="sm" className="gap-1" onClick={() => { setEditingUser(null); setNewUser({ displayName: "", username: "", password: "", role: "" }); setShowUserDialog(true); setUserMsg(null); }}><Plus className="h-4 w-4" />{t("addUser")}</Button>
             </CardHeader>
             <CardContent className="p-0">
               {usersLoading ? (
@@ -756,7 +891,6 @@ export default function SettingsPage() {
                     <TableRow>
                       <TableHead>{t("userCol")}</TableHead>
                       <TableHead>{t("usernameCol")}</TableHead>
-                      <TableHead>{t("emailCol")}</TableHead>
                       <TableHead>{t("roleCol")}</TableHead>
                       <TableHead>{tc("status")}</TableHead>
                       <TableHead>{t("lastLogin")}</TableHead>
@@ -769,7 +903,7 @@ export default function SettingsPage() {
                         <TableCell>
                           <div className="flex items-center justify-center gap-2">
                             <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-xs bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                              <AvatarFallback className="text-xs bg-gold-400/15 text-gold-600 dark:text-gold-400">
                                 {(user.displayName || user.username).split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                               </AvatarFallback>
                             </Avatar>
@@ -777,7 +911,6 @@ export default function SettingsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="font-mono text-sm">{user.username}</TableCell>
-                        <TableCell className="text-sm">{user.email}</TableCell>
                         <TableCell><Badge variant="outline" className={`${roleColors[user.role] || ""} border-0`}>{roleLabelKeys[user.role] ? t(roleLabelKeys[user.role]) : user.role}</Badge></TableCell>
                         <TableCell>
                           <Badge variant={user.isActive ? "success" : "secondary"}>{user.isActive ? t("active") : t("inactive")}</Badge>
@@ -785,15 +918,18 @@ export default function SettingsPage() {
                         <TableCell className="text-sm">{formatDate(user.lastLoginAt)}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600"><Trash2 className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditUser(user)}><Edit className="h-4 w-4" /></Button>
+                            {user.role !== "SUPER_ADMIN" && (
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openPermissions(user)} title={t("permissionsTitle")}><Shield className="h-4 w-4" /></Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeleteUser(user)}><Trash2 className="h-4 w-4" /></Button>
                           </div>
                         </TableCell>
                       </TableRow>
                     ))}
                     {users.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">{t("noUsersFound")}</TableCell>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">{t("noUsersFound")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -811,7 +947,12 @@ export default function SettingsPage() {
               <CardDescription>{t("notificationsDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {[
+              {notificationsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : (
+              [
                 { key: "email", labelKey: "emailNotifications", descKey: "emailNotificationsDesc" },
                 { key: "newOrder", labelKey: "newOrderAlerts", descKey: "newOrderAlertsDesc" },
                 { key: "lowStock", labelKey: "lowStockWarnings", descKey: "lowStockWarningsDesc" },
@@ -825,10 +966,12 @@ export default function SettingsPage() {
                   </div>
                   <Switch
                     checked={notifications[item.key as keyof typeof notifications]}
-                    onCheckedChange={(checked) => setNotifications({ ...notifications, [item.key]: checked })}
+                    onCheckedChange={(checked) => saveNotification(item.key, checked)}
+                    disabled={notificationsSaving}
                   />
                 </div>
-              ))}
+              ))
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -1163,13 +1306,13 @@ export default function SettingsPage() {
       {/* Add User Dialog */}
       <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
         <DialogContent className="p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Plus className="h-5 w-5" />
-              {t("addUser")}
+              {editingUser ? t("editUser") : t("addUser")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
-              {t("createUserDesc")}
+            <DialogDescription className="text-gold-200 mt-1">
+              {editingUser ? t("editUserDesc") : t("createUserDesc")}
             </DialogDescription>
           </div>
           <div className="px-6 pb-6">
@@ -1189,14 +1332,6 @@ export default function SettingsPage() {
                   onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>{t("email")}</Label>
-              <Input
-                type="email"
-                value={newUser.email}
-                onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              />
             </div>
             <div className="space-y-2">
               <Label>{t("password")}</Label>
@@ -1339,6 +1474,101 @@ export default function SettingsPage() {
               {tc("save")}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Permissions Dialog */}
+      <Dialog open={showPermDialog} onOpenChange={setShowPermDialog}>
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg shrink-0">
+            <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              {t("permissionsTitle")} - {permUser?.displayName || permUser?.username}
+            </DialogTitle>
+            <DialogDescription className="text-gold-200 mt-1">
+              {t("permissionsDesc")}
+            </DialogDescription>
+          </div>
+          <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
+            {permLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-end mb-2">
+                  <Button variant="outline" size="sm" onClick={toggleSelectAll}>
+                    {ALL_PERMISSION_KEYS.every((k) => permMap[k]) ? t("deselectAll") : t("selectAll")}
+                  </Button>
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[180px]">{t("permModule")}</TableHead>
+                      <TableHead className="text-center w-20">
+                        <button className="text-xs hover:underline" onClick={() => toggleAllColumn("view")}>{t("permView")}</button>
+                      </TableHead>
+                      <TableHead className="text-center w-20">
+                        <button className="text-xs hover:underline" onClick={() => toggleAllColumn("create")}>{t("permCreate")}</button>
+                      </TableHead>
+                      <TableHead className="text-center w-20">
+                        <button className="text-xs hover:underline" onClick={() => toggleAllColumn("edit")}>{t("permEdit")}</button>
+                      </TableHead>
+                      <TableHead className="text-center w-20">
+                        <button className="text-xs hover:underline" onClick={() => toggleAllColumn("delete")}>{t("permDelete")}</button>
+                      </TableHead>
+                      <TableHead className="text-center w-16">
+                        <span className="text-xs">{t("permAll")}</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {PERMISSION_GROUPS.map((group) => {
+                      const allActions = ["view", "create", "edit", "delete"] as const;
+                      return (
+                        <TableRow key={group.module}>
+                          <TableCell className="font-medium text-sm">
+                            {locale === "zh" ? group.labelZh : group.labelEn}
+                          </TableCell>
+                          {allActions.map((action) => {
+                            const key = `${group.module}.${action}`;
+                            const hasAction = group.actions.includes(action);
+                            return (
+                              <TableCell key={action} className="text-center">
+                                {hasAction ? (
+                                  <Checkbox
+                                    checked={!!permMap[key]}
+                                    onCheckedChange={() => togglePerm(key)}
+                                  />
+                                ) : (
+                                  <span className="text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            );
+                          })}
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={group.actions.every((a) => permMap[`${group.module}.${a}`])}
+                              onCheckedChange={() => toggleAllRow(group.module, group.actions)}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </>
+            )}
+          </div>
+          <div className="px-6 py-4 border-t shrink-0">
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowPermDialog(false)}>{tc("cancel")}</Button>
+              <Button onClick={handleSavePermissions} disabled={permSaving}>
+                {permSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                {tc("save")}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

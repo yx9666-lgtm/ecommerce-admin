@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   LayoutDashboard,
   Package,
@@ -20,20 +21,21 @@ import {
   Link2,
   ClipboardList,
   Building2,
+  Container,
 } from "lucide-react";
 
 const navItems = [
-  { key: "dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { key: "products", href: "/products", icon: Package },
-  { key: "orders", href: "/orders", icon: ShoppingCart },
-  { key: "purchasing", href: "/purchasing", icon: ClipboardList },
-  { key: "suppliers", href: "/suppliers", icon: Building2 },
-  { key: "inventory", href: "/inventory", icon: Warehouse },
-  { key: "finance", href: "/finance", icon: DollarSign },
-  { key: "analytics", href: "/analytics", icon: BarChart3 },
-  { key: "marketing", href: "/marketing", icon: Megaphone },
-  { key: "platforms", href: "/platforms", icon: Link2 },
-  { key: "settings", href: "/settings", icon: Settings },
+  { key: "dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
+  { key: "products", href: "/products", icon: Package, permission: "products.view" },
+  { key: "orders", href: "/orders", icon: ShoppingCart, permission: "orders.view" },
+  { key: "purchasing", href: "/purchasing", icon: ClipboardList, permission: "purchasing.view" },
+  { key: "suppliers", href: "/suppliers", icon: Building2, permission: "suppliers.view" },
+  { key: "warehouses", href: "/warehouses", icon: Container, permission: "warehouses.view" },
+  { key: "inventory", href: "/inventory", icon: Warehouse, permission: "inventory.view" },
+  { key: "finance", href: "/finance", icon: DollarSign, permission: "finance.view" },
+  { key: "analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
+  { key: "platforms", href: "/platforms", icon: Link2, permission: "platforms.view" },
+  { key: "settings", href: "/settings", icon: Settings, permission: "settings.view" },
 ];
 
 export function Sidebar() {
@@ -41,6 +43,9 @@ export function Sidebar() {
   const pathname = usePathname();
   const sidebarCollapsed = useAuthStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useAuthStore((s) => s.toggleSidebar);
+  const { can } = usePermissions();
+
+  const visibleNavItems = navItems.filter((item) => can(item.permission));
 
   return (
     <aside
@@ -57,7 +62,7 @@ export function Sidebar() {
           sidebarCollapsed ? "justify-center" : "gap-3"
         )}
       >
-        <div className="w-9 h-9 bg-gradient-gold rounded-xl shadow-glow-gold ring-2 ring-amber-200/30 flex items-center justify-center flex-shrink-0">
+        <div className="w-9 h-9 bg-gradient-gold rounded-xl shadow-glow-gold ring-2 ring-gold-200/30 flex items-center justify-center flex-shrink-0">
           <ShoppingBag className="w-5 h-5 text-white" />
         </div>
         {!sidebarCollapsed && (
@@ -71,7 +76,7 @@ export function Sidebar() {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto py-4 scrollbar-thin">
         <nav className="space-y-1 px-3">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const isActive =
               pathname === item.href || pathname.startsWith(item.href + "/");
             return (
@@ -82,13 +87,13 @@ export function Sidebar() {
                 className={cn(
                   "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   isActive
-                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 shadow-sidebar-active ring-1 ring-amber-500/20"
+                    ? "bg-gold-400/15 text-gold-600 dark:text-gold-400 shadow-sidebar-active ring-1 ring-gold-500/20"
                     : "text-muted-foreground hover:bg-muted dark:hover:bg-muted hover:text-foreground",
                   sidebarCollapsed && "justify-center px-2"
                 )}
               >
                 <item.icon
-                  className={cn("h-5 w-5 flex-shrink-0", isActive ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
+                  className={cn("h-5 w-5 flex-shrink-0", isActive ? "text-gold-600 dark:text-gold-400" : "text-muted-foreground")}
                 />
                 {!sidebarCollapsed && <span>{t(item.key)}</span>}
               </Link>

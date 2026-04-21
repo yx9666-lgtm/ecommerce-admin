@@ -46,7 +46,7 @@ type CarrierStat = {
 const statusConfig: Record<string, { color: string; icon: any; label: string }> = {
   pending: { color: "bg-gray-500/15 text-gray-600 dark:text-gray-400", icon: Clock, label: "Pending" },
   in_transit: { color: "bg-blue-500/15 text-blue-600 dark:text-blue-400", icon: Truck, label: "In Transit" },
-  out_for_delivery: { color: "bg-amber-500/15 text-amber-600 dark:text-amber-400", icon: Navigation, label: "Out for Delivery" },
+  out_for_delivery: { color: "bg-gold-400/15 text-gold-600 dark:text-gold-400", icon: Navigation, label: "Out for Delivery" },
   delivered: { color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", icon: CheckCircle2, label: "Delivered" },
   delayed: { color: "bg-red-500/15 text-red-600 dark:text-red-400", icon: AlertTriangle, label: "Delayed" },
 };
@@ -64,6 +64,8 @@ export default function LogisticsPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const pageSize = 20;
+  const totalPages = Math.ceil(total / pageSize);
 
   // Debounce ref for search input
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,7 +161,7 @@ export default function LogisticsPage() {
             <Card key={carrier.name}>
               <CardContent className="p-5">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 bg-amber-50 rounded-lg"><Truck className="h-5 w-5 text-amber-700" /></div>
+                  <div className="p-2 bg-gold-50 rounded-lg"><Truck className="h-5 w-5 text-gold-700" /></div>
                   <div>
                     <p className="font-medium text-sm">{carrier.name}</p>
                     <p className="text-xs text-muted-foreground">{carrier.shipments} shipments</p>
@@ -258,18 +260,29 @@ export default function LogisticsPage() {
               </TableBody>
             </Table>
           )}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t">
+              <span className="text-sm text-muted-foreground">
+                共 {total} 条，第 {page}/{totalPages} 页
+              </span>
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>下一页</Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Tracking Detail Dialog */}
       <Dialog open={!!selectedShipment} onOpenChange={() => setSelectedShipment(null)}>
         <DialogContent className="max-w-lg p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Truck className="h-5 w-5" />
               Tracking Details
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               {selectedShipment?.trackingNo}
             </DialogDescription>
           </div>
@@ -300,7 +313,7 @@ export default function LogisticsPage() {
                       {updates.map((update, i) => (
                         <div key={i} className="flex gap-3">
                           <div className="flex flex-col items-center">
-                            <div className={`w-3 h-3 rounded-full ${i === 0 ? "bg-amber-600" : "bg-muted-foreground/30"}`} />
+                            <div className={`w-3 h-3 rounded-full ${i === 0 ? "bg-gold-600" : "bg-muted-foreground/30"}`} />
                             {i < updates.length - 1 && <div className="w-0.5 h-full bg-muted-foreground/20 mt-1" />}
                           </div>
                           <div className="pb-4">

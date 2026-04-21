@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, withTryCatch, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const createWarehouseSchema = z.object({
   name: z.string().min(1),
@@ -12,6 +13,8 @@ const createWarehouseSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.warehouses.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);
@@ -40,6 +43,8 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.warehouses.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, createWarehouseSchema);

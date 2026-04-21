@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.inventory.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);

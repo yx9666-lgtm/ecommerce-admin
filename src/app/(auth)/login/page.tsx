@@ -56,7 +56,11 @@ export default function LoginPage() {
     });
 
     if (result?.error) {
-      setError(t("auth.loginError"));
+      if (result.error === "CredentialsSignin") {
+        setError(t("auth.loginError"));
+      } else {
+        setError(t("auth.loginSystemError"));
+      }
       setLoading(false);
     } else {
       router.push("/dashboard");
@@ -82,7 +86,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex bg-warm-50">
       {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-amber-500 via-orange-600 to-amber-800 relative overflow-hidden">
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-gold-500 via-gold-600 to-gold-800 relative overflow-hidden">
         <div className="absolute inset-0">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-yellow-400/10 rounded-full blur-3xl" />
@@ -95,14 +99,14 @@ export default function LoginPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold">EcomHub</h1>
-              <p className="text-amber-200 text-sm">Malaysia Edition</p>
+              <p className="text-gold-200 text-sm">Malaysia Edition</p>
             </div>
           </div>
 
           <h2 className="text-4xl font-bold leading-tight mb-4">
             {currentLocale === "zh" ? "统一管理您的电商帝国" : "Manage Your E-Commerce Empire"}
           </h2>
-          <p className="text-amber-200 text-lg mb-12 max-w-md">
+          <p className="text-gold-200 text-lg mb-12 max-w-md">
             {currentLocale === "zh"
               ? "连接 Shopee、Lazada、TikTok Shop、PG Mall，一站式管理订单、商品、库存与财务。"
               : "Connect Shopee, Lazada, TikTok Shop, PG Mall. Manage orders, products, inventory & finance in one place."}
@@ -114,7 +118,7 @@ export default function LoginPage() {
                 key={i}
                 className="flex items-center gap-3 bg-white/10 backdrop-blur-sm rounded-lg p-3"
               >
-                <f.icon className="w-5 h-5 text-amber-200" />
+                <f.icon className="w-5 h-5 text-gold-200" />
                 <span className="text-sm font-medium">{f.label}</span>
               </div>
             ))}
@@ -130,13 +134,13 @@ export default function LoginPage() {
               ].map((item, i) => (
                 <div
                   key={i}
-                  className={`w-8 h-8 ${item.color} rounded-full border-2 border-amber-700 flex items-center justify-center`}
+                  className={`w-8 h-8 ${item.color} rounded-full border-2 border-gold-700 flex items-center justify-center`}
                 >
                   <span className="text-white text-xs font-bold">{item.letter}</span>
                 </div>
               ))}
             </div>
-            <span className="text-amber-200 text-sm">
+            <span className="text-gold-200 text-sm">
               {currentLocale === "zh"
                 ? "支持马来西亚 4 大电商平台"
                 : "Supporting 4 major MY platforms"}
@@ -146,12 +150,10 @@ export default function LoginPage() {
       </div>
 
       {/* Right Panel - Login Form */}
-      <div className="flex-1 flex flex-col relative overflow-hidden" style={{
-        background: "radial-gradient(ellipse at 70% 30%, rgba(255, 243, 224, 0.6), transparent 60%), linear-gradient(to bottom, #FFFBF5, #FFF8F0)"
-      }}>
+      <div className="flex-1 flex flex-col relative overflow-hidden bg-background transition-colors duration-300">
         {/* Decorative orb */}
         <div className="absolute top-1/4 right-0 w-[300px] h-[300px] rounded-full opacity-30 pointer-events-none"
-          style={{ background: "radial-gradient(circle, rgba(255, 213, 79, 0.4), transparent 70%)", filter: "blur(60px)" }} />
+          style={{ background: "radial-gradient(circle, rgba(240, 180, 0, 0.4), transparent 70%)", filter: "blur(60px)" }} />
         {/* Language Toggle */}
         <div className="flex justify-end p-6">
           <Button

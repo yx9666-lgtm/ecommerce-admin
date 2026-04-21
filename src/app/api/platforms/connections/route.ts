@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getAuthContext, assertStoreOwnership, withTryCatch, apiError, parseBody } from "@/lib/api-utils";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const createConnectionSchema = z.object({
   platform: z.enum(["SHOPEE", "LAZADA", "TIKTOK", "PGMALL"]),
@@ -11,6 +12,8 @@ const createConnectionSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const connections = await prisma.platformConnection.findMany({
@@ -84,6 +87,8 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, createConnectionSchema);

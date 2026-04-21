@@ -42,6 +42,7 @@
     "loginSubtitle": "Sign in to your e-commerce dashboard",
     "loginButton": "Sign In",
     "loginError": "Invalid username or password",
+    "loginSystemError": "Login service is unavailable. Please try again later.",
     "loginSuccess": "Login successful"
   },
   "nav": {
@@ -81,7 +82,11 @@
     "comparedToLastMonth": "vs last month",
     "salesOverview": "Sales Overview",
     "ordersByPlatform": "Orders by Platform",
-    "alerts": "Action Required"
+    "alerts": "Action Required",
+    "suppliers": "Suppliers",
+    "purchaseOrders": "Purchase Orders",
+    "warehouses": "Warehouses",
+    "totalExpenses": "Total Expenses"
   },
   "products": {
     "title": "Products",
@@ -108,7 +113,9 @@
     "statusInactive": "Inactive",
     "statusArchived": "Archived",
     "deleteConfirm": "Are you sure you want to delete this product?",
-    "platforms": "Listed Platforms"
+    "platforms": "Listed Platforms",
+    "sourceFromPurchasing": "Products are synced from Purchasing. Create purchase orders to add new products.",
+    "createFromPurchasingOnly": "Products are created via Purchasing sync. Product Management only supports editing."
   },
   "orders": {
     "title": "Orders",
@@ -165,7 +172,8 @@
     "sellerNote": "Seller Note",
     "paidAt": "Paid At",
     "channelAndOrderIdRequired": "Please select a channel and enter order ID",
-    "atLeastOneItem": "At least one item is required"
+    "atLeastOneItem": "At least one item is required",
+    "selectProduct": "Select Product"
   },
   "inventory": {
     "title": "Inventory",
@@ -271,6 +279,7 @@
     "title": "Marketing",
     "promotions": "Promotions",
     "addPromotion": "Add Promotion",
+    "editPromotion": "Edit Promotion",
     "promotionName": "Promotion Name",
     "type": "Type",
     "discount": "Discount",
@@ -361,6 +370,9 @@
     "saveFailed": "Failed to save",
     "networkError": "Network error",
     "userCreated": "User created successfully",
+    "userSaved": "User saved successfully",
+    "editUserDesc": "Edit user information",
+    "confirmDeleteUser": "Are you sure you want to delete this user?",
     "createUserFailed": "Failed to create user",
     "usersDesc": "Manage user accounts and permissions",
     "userCol": "User",
@@ -412,7 +424,18 @@
     "poPrefix": "PO Number Prefix",
     "poPrefixDesc": "e.g. RJ generates RJ20260417-001",
     "prefixTitle": "Code Prefix Settings",
-    "prefixDesc": "Customize prefixes and starting numbers for SKU, supplier number and PO number"
+    "prefixDesc": "Customize prefixes and starting numbers for SKU, supplier number and PO number",
+    "permissionsTitle": "Permissions",
+    "permissionsDesc": "Configure which modules and operations this user can access",
+    "permModule": "Module",
+    "permView": "View",
+    "permCreate": "Create",
+    "permEdit": "Edit",
+    "permDelete": "Delete",
+    "permAll": "All",
+    "selectAll": "Select All",
+    "deselectAll": "Deselect All",
+    "permissionsSaved": "Permissions saved"
   },
   "purchasing": {
     "title": "Purchasing",

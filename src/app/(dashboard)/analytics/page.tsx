@@ -119,8 +119,8 @@ export default function AnalyticsPage() {
         </Card>
         <Card>
           <CardContent className="flex items-center gap-4 pt-6">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-              <Receipt className="h-5 w-5 text-amber-500" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-400/10">
+              <Receipt className="h-5 w-5 text-gold-500" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">{t("avgOrderValue")}</p>
@@ -266,7 +266,7 @@ export default function AnalyticsPage() {
                 productRanking.map((p) => (
                   <TableRow key={p.rank}>
                     <TableCell>
-                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${p.rank <= 3 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400" : "bg-muted text-muted-foreground"}`}>
+                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${p.rank <= 3 ? "bg-gold-400/15 text-gold-600 dark:text-gold-400" : "bg-muted text-muted-foreground"}`}>
                         {p.rank}
                       </span>
                     </TableCell>

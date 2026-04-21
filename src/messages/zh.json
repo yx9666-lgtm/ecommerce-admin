@@ -42,6 +42,7 @@
     "loginSubtitle": "登录您的电商管理系统",
     "loginButton": "登 录",
     "loginError": "用户名或密码错误",
+    "loginSystemError": "登录服务异常，请稍后重试",
     "loginSuccess": "登录成功"
   },
   "nav": {
@@ -81,7 +82,11 @@
     "comparedToLastMonth": "较上月",
     "salesOverview": "销售概览",
     "ordersByPlatform": "平台订单分布",
-    "alerts": "待处理提醒"
+    "alerts": "待处理提醒",
+    "suppliers": "供应商",
+    "purchaseOrders": "采购单",
+    "warehouses": "仓库",
+    "totalExpenses": "总支出"
   },
   "products": {
     "title": "商品管理",
@@ -108,7 +113,9 @@
     "statusInactive": "下架",
     "statusArchived": "归档",
     "deleteConfirm": "确定要删除这个商品吗？",
-    "platforms": "上架平台"
+    "platforms": "上架平台",
+    "sourceFromPurchasing": "商品来源于采购管理，新增请在采购管理中创建采购单。",
+    "createFromPurchasingOnly": "商品由采购同步创建，商品管理仅支持编辑与维护。"
   },
   "orders": {
     "title": "订单管理",
@@ -165,7 +172,8 @@
     "sellerNote": "卖家备注",
     "paidAt": "付款时间",
     "channelAndOrderIdRequired": "请选择渠道并填写订单号",
-    "atLeastOneItem": "至少需要一件商品"
+    "atLeastOneItem": "至少需要一件商品",
+    "selectProduct": "选择商品"
   },
   "inventory": {
     "title": "库存管理",
@@ -271,6 +279,7 @@
     "title": "营销工具",
     "promotions": "促销活动",
     "addPromotion": "添加活动",
+    "editPromotion": "编辑活动",
     "promotionName": "活动名称",
     "type": "类型",
     "discount": "折扣",
@@ -361,6 +370,9 @@
     "saveFailed": "保存失败",
     "networkError": "网络错误",
     "userCreated": "用户创建成功",
+    "userSaved": "用户已保存",
+    "editUserDesc": "编辑用户信息",
+    "confirmDeleteUser": "确定要删除该用户吗？",
     "createUserFailed": "创建用户失败",
     "usersDesc": "管理用户账号和权限",
     "userCol": "用户",
@@ -412,7 +424,18 @@
     "poPrefix": "采购单号前缀",
     "poPrefixDesc": "如 RJ 则生成 RJ20260417-001",
     "prefixTitle": "编码前缀设置",
-    "prefixDesc": "自定义商品SKU、供应商编号和采购单号的前缀和起始编号"
+    "prefixDesc": "自定义商品SKU、供应商编号和采购单号的前缀和起始编号",
+    "permissionsTitle": "权限设置",
+    "permissionsDesc": "配置该用户可以访问的功能模块和操作权限",
+    "permModule": "功能模块",
+    "permView": "查看",
+    "permCreate": "新增",
+    "permEdit": "编辑",
+    "permDelete": "删除",
+    "permAll": "全选",
+    "selectAll": "全选",
+    "deselectAll": "取消全选",
+    "permissionsSaved": "权限已保存"
   },
   "purchasing": {
     "title": "采购管理",

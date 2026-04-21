@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, withTryCatch, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const unitSchema = z.object({
   name: z.string().min(1),
@@ -12,6 +13,8 @@ const unitSchema = z.object({
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const units = await prisma.unitOfMeasure.findMany({
@@ -25,6 +28,8 @@ export const GET = withTryCatch(async () => {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, unitSchema);

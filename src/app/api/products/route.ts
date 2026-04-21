@@ -1,27 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
+import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
-
-const createProductSchema = z.object({
-  sku: z.string().optional(),
-  nameZh: z.string().min(1),
-  nameEn: z.string().optional(),
-  descZh: z.string().optional(),
-  descEn: z.string().optional(),
-  costPrice: z.number().min(0).optional(),
-  sellingPrice: z.number().min(0).optional(),
-  comparePrice: z.number().positive().nullable().optional(),
-  weight: z.number().min(0).nullable().optional(),
-  status: z.enum(["DRAFT", "ACTIVE", "INACTIVE", "ARCHIVED"]).optional(),
-  categoryId: z.string().optional(),
-  brand: z.string().optional(),
-  totalStock: z.number().int().min(0).optional(),
-});
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.products.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);
@@ -114,56 +100,16 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   return NextResponse.json({ items, total, page, pageSize });
 });
 
-async function generateNextSku(storeId: string): Promise<string> {
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { skuPrefix: true, skuStartNo: true } });
-  const prefix = store?.skuPrefix || "RJ";
-  const startStr = store?.skuStartNo || "1001";
-  const startNum = parseInt(startStr, 10) || 1001;
-  const fullPrefix = `${prefix}-`;
-
-  const latest = await prisma.product.findFirst({
-    where: { storeId, sku: { startsWith: fullPrefix } },
-    orderBy: { sku: "desc" },
-    select: { sku: true },
-  });
-
-  if (!latest) return `${fullPrefix}${startStr}`;
-
-  const num = parseInt(latest.sku.replace(fullPrefix, ""), 10);
-  if (isNaN(num)) return `${fullPrefix}${startStr}`;
-
-  return `${fullPrefix}${num + 1}`;
-}
-
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const { storeId } = ctx;
-
-  const body = await parseBody(req, createProductSchema);
-  if (body instanceof NextResponse) return body;
-
-  const sku = body.sku?.trim() || await generateNextSku(storeId);
-
-  const product = await prisma.product.create({
-    data: {
-      storeId,
-      sku,
-      nameZh: body.nameZh,
-      nameEn: body.nameEn || "",
-      descZh: body.descZh,
-      descEn: body.descEn,
-      costPrice: body.costPrice || 0,
-      sellingPrice: body.sellingPrice || 0,
-      comparePrice: body.comparePrice,
-      weight: body.weight,
-      status: body.status || "DRAFT",
-      categoryId: body.categoryId,
-      brand: body.brand,
-      totalStock: body.totalStock || 0,
+  const denied = requirePermission(ctx, PERMISSIONS.products.create);
+  if (denied) return denied;
+  return NextResponse.json(
+    {
+      error: "Products are created from Purchasing. Please create purchase orders to sync products.",
+      code: "PRODUCT_CREATE_FROM_PURCHASING_ONLY",
     },
-    include: { variants: true, images: true },
-  });
-
-  return NextResponse.json(product, { status: 201 });
+    { status: 403 }
+  );
 });

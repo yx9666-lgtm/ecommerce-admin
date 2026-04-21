@@ -77,6 +77,8 @@ export default function FinancePage() {
   const [incomes, setIncomes] = useState<any[]>([]);
   const [incomeTotal, setIncomeTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [expensePage, setExpensePage] = useState(1);
+  const [incomePage, setIncomePage] = useState(1);
   const [pageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [showChart, setShowChart] = useState(false);
@@ -144,7 +146,7 @@ export default function FinancePage() {
 
   const fetchExpenses = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: page.toString(), pageSize: pageSize.toString() });
+      const params = new URLSearchParams({ page: expensePage.toString(), pageSize: pageSize.toString() });
       const res = await fetch(`/api/expenses?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -152,11 +154,11 @@ export default function FinancePage() {
         setExpenseTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-  }, [page, pageSize]);
+  }, [expensePage, pageSize]);
 
   const fetchIncomes = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: page.toString(), pageSize: pageSize.toString() });
+      const params = new URLSearchParams({ page: incomePage.toString(), pageSize: pageSize.toString() });
       const res = await fetch(`/api/incomes?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -164,7 +166,7 @@ export default function FinancePage() {
         setIncomeTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-  }, [page, pageSize]);
+  }, [incomePage, pageSize]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -237,7 +239,7 @@ export default function FinancePage() {
     if (!a.date && !b.date) return 0;
     if (!a.date) return 1;
     if (!b.date) return -1;
-    return new Date(a.date).getTime() - new Date(b.date).getTime();
+    return new Date(b.date).getTime() - new Date(a.date).getTime();
   });
 
   // Filter by date range
@@ -329,10 +331,8 @@ export default function FinancePage() {
     setEditRecordError(null);
     try {
       const endpoint = editingRecord.type === "income" ? "incomes" : "expenses";
-      // Delete old and create new (simple approach since no PUT endpoint for expenses/incomes)
-      await fetch(`/api/${endpoint}/${editingRecord.id}`, { method: "DELETE" });
-      const res = await fetch(`/api/${endpoint}`, {
-        method: "POST",
+      const res = await fetch(`/api/${endpoint}/${editingRecord.id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category: editRecordCategory,
@@ -432,7 +432,7 @@ export default function FinancePage() {
                   </div>
                 )}
               </div>
-              <div className="bg-amber-50 dark:bg-amber-500/15 p-3 rounded-xl"><TrendingUp className="h-6 w-6 text-amber-700" /></div>
+              <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl"><TrendingUp className="h-6 w-6 text-gold-700" /></div>
             </div>
           </CardContent>
         </Card>
@@ -570,7 +570,7 @@ export default function FinancePage() {
                         </TableCell>
                         <TableCell className="text-center">
                           {record.type === "order" ? (
-                            <Badge variant="outline" className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border-0">渠道收入</Badge>
+                            <Badge variant="outline" className="bg-gold-400/15 text-gold-600 dark:text-gold-400 border-0">渠道收入</Badge>
                           ) : record.type === "income" ? (
                             <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">收入</Badge>
                           ) : (
@@ -614,7 +614,7 @@ export default function FinancePage() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+                                  className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10"
                                   onClick={() => handleEditRecord(record)}
                                 >
                                   <Edit className="h-3.5 w-3.5" />
@@ -659,12 +659,12 @@ export default function FinancePage() {
       {/* Add Expense Dialog */}
       <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
         <DialogContent className="p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingDown className="h-5 w-5" />
               {t("addExpense")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               记录新的支出
             </DialogDescription>
           </div>
@@ -717,12 +717,12 @@ export default function FinancePage() {
       {/* Add Income Dialog */}
       <Dialog open={showIncomeDialog} onOpenChange={setShowIncomeDialog}>
         <DialogContent className="p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
               添加收入
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               记录新的收入
             </DialogDescription>
           </div>
@@ -775,12 +775,12 @@ export default function FinancePage() {
       {/* Edit Record Dialog */}
       <Dialog open={!!editingRecord} onOpenChange={() => setEditingRecord(null)}>
         <DialogContent className="p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Edit className="h-5 w-5" />
               编辑{editingRecord?.type === "income" ? "收入" : "支出"}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               修改记录信息
             </DialogDescription>
           </div>

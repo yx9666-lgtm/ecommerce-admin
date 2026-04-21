@@ -16,7 +16,7 @@ export default function Error({
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="text-center space-y-6 p-8">
-        <div className="text-6xl font-bold text-amber-500">500</div>
+        <div className="text-6xl font-bold text-gold-500">500</div>
         <h2 className="text-xl font-semibold text-foreground">
           出错了
         </h2>
@@ -25,7 +25,7 @@ export default function Error({
         </p>
         <button
           onClick={reset}
-          className="inline-flex items-center rounded-full px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 transition-all"
+          className="inline-flex items-center rounded-full px-6 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-gold-500 to-gold-700 hover:from-gold-600 hover:to-gold-800 transition-all"
         >
           重试
         </button>

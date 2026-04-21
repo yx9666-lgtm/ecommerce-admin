@@ -52,7 +52,7 @@ export function PasswordConfirmDialog({ open, onClose, onConfirm, action, itemNa
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { setPassword(""); setError(""); onClose(); } }}>
       <DialogContent className="max-w-sm p-0 gap-0">
-        <div className={`px-5 py-4 rounded-t-lg ${isDelete ? "bg-gradient-to-r from-red-500 to-red-600" : "bg-gradient-to-r from-amber-500 to-orange-600"} text-white`}>
+        <div className={`px-5 py-4 rounded-t-lg ${isDelete ? "bg-gradient-to-r from-red-500 to-red-600" : "bg-gradient-to-r from-gold-500 to-gold-700"} text-white`}>
           <DialogTitle className="text-sm font-bold text-white flex items-center gap-2">
             {isDelete ? <AlertTriangle className="h-4 w-4" /> : <ShieldCheck className="h-4 w-4" />}
             {isDelete ? "确认删除" : "确认编辑"}
@@ -86,7 +86,7 @@ export function PasswordConfirmDialog({ open, onClose, onConfirm, action, itemNa
           </Button>
           <Button
             size="sm"
-            className={`px-5 ${isDelete ? "bg-red-600 hover:bg-red-700" : "bg-amber-600 hover:bg-amber-700"}`}
+            className={`px-5 ${isDelete ? "bg-red-600 hover:bg-red-700" : "bg-gold-600 hover:bg-gold-700"}`}
             onClick={handleSubmit}
             disabled={loading}
           >

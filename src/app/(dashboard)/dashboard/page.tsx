@@ -56,7 +56,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center py-24">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-gold-600" />
       </div>
     );
   }
@@ -65,16 +65,16 @@ export default function DashboardPage() {
 
   const statCards = [
     { key: "todaySales", value: formatCurrency(stats?.totalRevenue || 0), icon: DollarSign, color: "text-white", bg: "bg-gradient-gold" },
-    { key: "todayOrders", value: stats?.orderCount || 0, icon: ShoppingCart, color: "text-amber-700", bg: "bg-gradient-to-br from-amber-100 to-amber-200" },
-    { key: "totalProducts", value: stats?.productCount || 0, icon: Package, color: "text-amber-800", bg: "bg-gradient-to-br from-amber-200 to-amber-300" },
-    { key: "totalCustomers", value: stats?.customerCount || 0, icon: Users, color: "text-amber-600", bg: "bg-gradient-to-br from-amber-50 to-amber-100" },
+    { key: "todayOrders", value: stats?.orderCount || 0, icon: ShoppingCart, color: "text-gold-700", bg: "bg-gradient-to-br from-gold-100 to-gold-200" },
+    { key: "totalProducts", value: stats?.productCount || 0, icon: Package, color: "text-gold-800", bg: "bg-gradient-to-br from-gold-200 to-gold-300" },
+    { key: "totalCustomers", value: stats?.customerCount || 0, icon: Users, color: "text-gold-600", bg: "bg-gradient-to-br from-gold-50 to-gold-100" },
   ];
 
   const extraStats = [
-    { label: "供应商", value: stats?.supplierCount || 0, icon: Building2, color: "text-white", bg: "bg-gradient-to-br from-amber-300 to-amber-400" },
-    { label: "采购单", value: stats?.purchaseOrderCount || 0, icon: ClipboardList, color: "text-amber-700", bg: "bg-gradient-to-br from-amber-100 to-amber-200" },
-    { label: "仓库", value: data?.warehouses?.length || 0, icon: Warehouse, color: "text-amber-800", bg: "bg-gradient-to-br from-amber-200 to-amber-300" },
-    { label: "总支出", value: formatCurrency(stats?.totalExpenses || 0), icon: DollarSign, color: "text-red-600", bg: "bg-gradient-to-br from-red-100 to-red-200" },
+    { label: t("suppliers") as string, value: stats?.supplierCount || 0, icon: Building2, color: "text-white", bg: "bg-gradient-to-br from-gold-300 to-gold-400" },
+    { label: t("purchaseOrders") as string, value: stats?.purchaseOrderCount || 0, icon: ClipboardList, color: "text-gold-700", bg: "bg-gradient-to-br from-gold-100 to-gold-200" },
+    { label: t("warehouses") as string, value: data?.warehouses?.length || 0, icon: Warehouse, color: "text-gold-800", bg: "bg-gradient-to-br from-gold-200 to-gold-300" },
+    { label: t("totalExpenses") as string, value: formatCurrency(stats?.totalExpenses || 0), icon: DollarSign, color: "text-red-600", bg: "bg-gradient-to-br from-red-100 to-red-200" },
   ];
 
   return (

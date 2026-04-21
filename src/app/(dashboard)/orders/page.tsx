@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ImageGallery } from "@/components/ui/image-gallery";
 import {
   Search,
   Download,
@@ -64,6 +65,7 @@ interface OrderItem {
   id: string;
   name: string;
   sku: string | null;
+  imageUrls?: string[];
   quantity: number;
   unitPrice: number;
   totalPrice: number;
@@ -175,6 +177,49 @@ export default function OrdersPage() {
   const [editItems, setEditItems] = useState<NewOrderItem[]>([
     { productId: "", sku: "", name: "", quantity: "", unitPrice: "" },
   ]);
+
+  // Batch selection state
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
+  const [batchShipping, setBatchShipping] = useState(false);
+
+  const toggleSelectOrder = (id: string) => {
+    setSelectedOrderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedOrderIds.size === orders.length) {
+      setSelectedOrderIds(new Set());
+    } else {
+      setSelectedOrderIds(new Set(orders.map((o) => o.id)));
+    }
+  };
+
+  const handleBatchShip = async () => {
+    if (selectedOrderIds.size === 0) return;
+    if (!confirm(`确定将 ${selectedOrderIds.size} 个订单标记为已发货？`)) return;
+    setBatchShipping(true);
+    try {
+      const promises = Array.from(selectedOrderIds).map((id) =>
+        fetch(`/api/orders/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "SHIPPED" }),
+        })
+      );
+      await Promise.all(promises);
+      setSelectedOrderIds(new Set());
+      fetchOrders();
+    } catch (err) {
+      console.error("Batch ship failed:", err);
+    } finally {
+      setBatchShipping(false);
+    }
+  };
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -538,9 +583,9 @@ export default function OrdersPage() {
             <Plus className="h-4 w-4" />
             {t("createOrder")}
           </Button>
-          <Button variant="outline" size="sm" className="gap-1">
-            <Truck className="h-4 w-4" />
-            {t("batchShip")}
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleBatchShip} disabled={selectedOrderIds.size === 0 || batchShipping}>
+            {batchShipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+            {t("batchShip")} {selectedOrderIds.size > 0 && `(${selectedOrderIds.size})`}
           </Button>
           <Button variant="outline" size="sm" className="gap-1">
             <Download className="h-4 w-4" />
@@ -569,6 +614,8 @@ export default function OrdersPage() {
                     <input
                       type="checkbox"
                       className="rounded border-muted-foreground/30"
+                      checked={orders.length > 0 && selectedOrderIds.size === orders.length}
+                      onChange={toggleSelectAll}
                     />
                   </TableHead>
                   <TableHead>{t("orderId")}</TableHead>
@@ -598,6 +645,8 @@ export default function OrdersPage() {
                         <input
                           type="checkbox"
                           className="rounded border-muted-foreground/30"
+                          checked={selectedOrderIds.has(order.id)}
+                          onChange={() => toggleSelectOrder(order.id)}
                         />
                       </TableCell>
                       <TableCell>
@@ -628,15 +677,16 @@ export default function OrdersPage() {
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => setSelectedOrder(order)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => setSelectedOrder(order)}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={() => openEditDialog(order)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => openEditDialog(order)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={async () => {
                             if (!confirm("确定要删除此订单吗？")) return;
-                            await fetch(`/api/orders/${order.id}`, { method: "DELETE" });
+                            const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE" });
+                            if (!res.ok) { alert("删除失败"); return; }
                             fetchOrders();
                           }}>
                             <Trash2 className="h-3.5 w-3.5" />
@@ -666,7 +716,12 @@ export default function OrdersPage() {
           >
             {tc("previous")}
           </Button>
-          {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(
+          {(() => {
+            const start = Math.max(1, page - 2);
+            const end = Math.min(totalPages, start + 4);
+            const adjustedStart = Math.max(1, end - 4);
+            return Array.from({ length: end - adjustedStart + 1 }, (_, i) => adjustedStart + i);
+          })().map(
             (p) => (
               <Button
                 key={p}
@@ -698,12 +753,12 @@ export default function OrdersPage() {
         onOpenChange={() => setSelectedOrder(null)}
       >
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Eye className="h-5 w-5" />
               {t("orderDetail")} - {selectedOrder?.platformOrderId}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               {selectedOrder?.channel?.name || selectedOrder?.platform || ""}
             </DialogDescription>
           </div>
@@ -736,9 +791,11 @@ export default function OrdersPage() {
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-muted rounded-lg flex items-center justify-center">
-                          <Package className="h-6 w-6 text-muted-foreground" />
-                        </div>
+                        <ImageGallery
+                          images={item.imageUrls || []}
+                          alt={item.name}
+                          thumbnailSize={48}
+                        />
                         <div>
                           <p className="text-sm font-medium">{item.name}</p>
                           {item.sku && (
@@ -866,12 +923,12 @@ export default function OrdersPage() {
       {/* Create Order Dialog */}
       <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <ShoppingCart className="h-5 w-5" />
               {t("createOrder")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               {t("createOrderDesc")}
             </DialogDescription>
           </div>
@@ -961,7 +1018,7 @@ export default function OrdersPage() {
                         }}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={t("selectChannel")} />
+                          <SelectValue placeholder={t("selectProduct")} />
                         </SelectTrigger>
                         <SelectContent>
                           {products.map((p) => (
@@ -1119,12 +1176,12 @@ export default function OrdersPage() {
       {/* Edit Order Dialog */}
       <Dialog open={!!editingOrder} onOpenChange={() => setEditingOrder(null)}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Edit className="h-5 w-5" />
               编辑订单 - {editingOrder?.platformOrderId}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               修改订单信息后点击保存
             </DialogDescription>
           </div>
@@ -1214,7 +1271,7 @@ export default function OrdersPage() {
                         }}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={item.sku ? `${item.sku} - ${item.name}` : t("selectChannel")} />
+                          <SelectValue placeholder={item.sku ? `${item.sku} - ${item.name}` : t("selectProduct")} />
                         </SelectTrigger>
                         <SelectContent>
                           {products.map((p) => (

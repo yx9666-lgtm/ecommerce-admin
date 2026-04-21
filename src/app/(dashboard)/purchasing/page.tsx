@@ -103,8 +103,8 @@ const currencies = [
 const statusMap: Record<string, { label: string; color: string }> = {
   DRAFT: { label: "草稿", color: "bg-gray-500/15 text-gray-600 dark:text-gray-400" },
   SUBMITTED: { label: "已提交", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
-  CONFIRMED: { label: "已确认", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
-  PARTIALLY_RECEIVED: { label: "部分收货", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  CONFIRMED: { label: "已确认", color: "bg-gold-400/15 text-gold-600 dark:text-gold-400" },
+  PARTIALLY_RECEIVED: { label: "部分收货", color: "bg-gold-400/15 text-gold-600 dark:text-gold-400" },
   RECEIVED: { label: "已收货", color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
   CANCELLED: { label: "已取消", color: "bg-red-500/15 text-red-600 dark:text-red-400" },
 };
@@ -414,8 +414,8 @@ export default function PurchasingPage() {
               <p className="text-sm text-muted-foreground">{t("totalPOs")}</p>
               <p className="text-2xl font-bold mt-1">{poStats.totalPOs}</p>
             </div>
-            <div className="bg-amber-50 dark:bg-amber-500/15 p-3 rounded-xl">
-              <ClipboardList className="h-6 w-6 text-amber-700" />
+            <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl">
+              <ClipboardList className="h-6 w-6 text-gold-700" />
             </div>
           </CardContent>
         </Card>
@@ -425,8 +425,8 @@ export default function PurchasingPage() {
               <p className="text-sm text-muted-foreground">{t("pendingDelivery")}</p>
               <p className="text-2xl font-bold mt-1">{pendingCount}</p>
             </div>
-            <div className="bg-amber-50 dark:bg-amber-500/15 p-3 rounded-xl">
-              <Truck className="h-6 w-6 text-amber-600" />
+            <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl">
+              <Truck className="h-6 w-6 text-gold-600" />
             </div>
           </CardContent>
         </Card>
@@ -461,7 +461,7 @@ export default function PurchasingPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-16">
-              <Loader2 className="h-6 w-6 animate-spin text-amber-700" />
+              <Loader2 className="h-6 w-6 animate-spin text-gold-700" />
             </div>
           ) : pos.length === 0 ? (
             <div className="text-center py-16">
@@ -521,7 +521,7 @@ export default function PurchasingPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10" onClick={async () => {
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={async () => {
                             try {
                               const res = await fetch(`/api/purchasing/${po.id}`);
                               if (res.ok) setViewPO(await res.json());
@@ -530,7 +530,7 @@ export default function PurchasingPage() {
                           }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:bg-amber-50" onClick={() => openEditPO(po)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 hover:bg-gold-50" onClick={() => openEditPO(po)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => openDeletePO(po)}>
@@ -550,12 +550,12 @@ export default function PurchasingPage() {
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         <DialogContent className="max-w-5xl max-h-[95vh] overflow-y-auto p-0">
           {/* Header */}
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <ClipboardList className="h-5 w-5" />
               {editingPoId ? "编辑采购单" : t("addPO")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               {editingPoId ? "修改采购单信息" : "填写采购单信息，系统将自动计算汇率换算"}
             </DialogDescription>
           </div>
@@ -564,7 +564,7 @@ export default function PurchasingPage() {
             {/* Section 1: Basic Info */}
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 bg-amber-500/15 rounded flex items-center justify-center text-xs font-bold text-amber-700">
+                <div className="w-5 h-5 bg-gold-400/15 rounded flex items-center justify-center text-xs font-bold text-gold-700">
                   1
                 </div>
                 基本信息
@@ -572,8 +572,8 @@ export default function PurchasingPage() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">采购单号</Label>
-                  <div className="h-10 flex items-center bg-amber-50 rounded-md px-3 border border-amber-100">
-                    <span className="font-mono text-sm font-bold text-amber-700">{nextPoNumber}</span>
+                  <div className="h-10 flex items-center bg-gold-50 rounded-md px-3 border border-gold-100">
+                    <span className="font-mono text-sm font-bold text-gold-700">{nextPoNumber}</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
@@ -653,13 +653,13 @@ export default function PurchasingPage() {
             {/* Section 2: Currency & Exchange Rate */}
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 bg-amber-500/15 rounded flex items-center justify-center text-xs font-bold text-amber-700">
+                <div className="w-5 h-5 bg-gold-400/15 rounded flex items-center justify-center text-xs font-bold text-gold-700">
                   2
                 </div>
                 <ArrowRightLeft className="h-4 w-4" />
                 货币与汇率
               </h4>
-              <div className="bg-gradient-to-r from-amber-50/50 to-orange-50/50 rounded-xl p-4">
+              <div className="bg-gradient-to-r from-gold-50/50 to-gold-50/50 rounded-xl p-4">
                 <div className="grid grid-cols-3 gap-4 items-end">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-medium text-muted-foreground">采购货币</Label>
@@ -721,7 +721,7 @@ export default function PurchasingPage() {
             <div>
               <div className="flex justify-between items-center mb-3">
                 <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                  <div className="w-5 h-5 bg-amber-500/15 rounded flex items-center justify-center text-xs font-bold text-amber-700">
+                  <div className="w-5 h-5 bg-gold-400/15 rounded flex items-center justify-center text-xs font-bold text-gold-700">
                     3
                   </div>
                   <Package className="h-4 w-4" />
@@ -731,7 +731,7 @@ export default function PurchasingPage() {
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="gap-1 text-amber-700 border-amber-200 hover:bg-amber-50"
+                  className="gap-1 text-gold-700 border-gold-200 hover:bg-gold-50"
                   onClick={handleAddItem}
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -750,8 +750,8 @@ export default function PurchasingPage() {
                       <div className="grid grid-cols-12 gap-3 items-start">
                         <div className="col-span-2 space-y-1">
                           <Label className="text-[10px] text-muted-foreground">SKU (自动)</Label>
-                          <div className="h-10 flex items-center bg-amber-50 rounded-md px-3 border border-amber-100">
-                            <span className="font-mono text-sm font-bold text-amber-700">{getAutoSku(i)}</span>
+                          <div className="h-10 flex items-center bg-gold-50 rounded-md px-3 border border-gold-100">
+                            <span className="font-mono text-sm font-bold text-gold-700">{getAutoSku(i)}</span>
                           </div>
                         </div>
                         <div className="col-span-4 space-y-1">
@@ -802,7 +802,7 @@ export default function PurchasingPage() {
                             <ImagePlus className="h-3 w-3" />
                             商品图片
                             {item.images.length > 0 && (
-                              <span className="ml-0.5 bg-amber-500/15 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold">{item.images.length}</span>
+                              <span className="ml-0.5 bg-gold-400/15 text-gold-600 dark:text-gold-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold">{item.images.length}</span>
                             )}
                           </Label>
                           <div className="flex gap-2 flex-wrap items-center">
@@ -812,13 +812,13 @@ export default function PurchasingPage() {
                                 <button type="button" onClick={() => removeImage(i, imgIdx)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity">×</button>
                               </div>
                             ))}
-                            <label className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-amber-400 hover:bg-amber-50/50 transition-all group/add flex-shrink-0">
+                            <label className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 hover:bg-gold-50/50 transition-all group/add flex-shrink-0">
                               {uploadingIdx === i ? (
-                                <Loader2 className="h-4 w-4 text-amber-400 animate-spin" />
+                                <Loader2 className="h-4 w-4 text-gold-400 animate-spin" />
                               ) : (
                                 <>
-                                  <Plus className="h-4 w-4 text-muted-foreground group-hover/add:text-amber-400 transition-colors" />
-                                  <span className="text-[8px] text-muted-foreground group-hover/add:text-amber-600">上传</span>
+                                  <Plus className="h-4 w-4 text-muted-foreground group-hover/add:text-gold-400 transition-colors" />
+                                  <span className="text-[8px] text-muted-foreground group-hover/add:text-gold-600">上传</span>
                                 </>
                               )}
                               <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple className="hidden"
@@ -846,7 +846,7 @@ export default function PurchasingPage() {
             {/* Section 4: Summary */}
             <div>
               <h4 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-                <div className="w-5 h-5 bg-amber-500/15 rounded flex items-center justify-center text-xs font-bold text-amber-700">
+                <div className="w-5 h-5 bg-gold-400/15 rounded flex items-center justify-center text-xs font-bold text-gold-700">
                   4
                 </div>
                 费用汇总
@@ -961,12 +961,12 @@ export default function PurchasingPage() {
             const refundAmtLocal = (viewPO as any).refundAmountLocal || 0;
             return (
               <>
-                <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+                <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
                   <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
                     <Eye className="h-5 w-5" />
                     采购单详情
                   </DialogTitle>
-                  <DialogDescription className="text-amber-200 mt-1 flex items-center gap-3">
+                  <DialogDescription className="text-gold-200 mt-1 flex items-center gap-3">
                     <span className="font-mono font-bold text-white">{viewPO.poNumber}</span>
                     <Badge variant="outline" className={`${st.color} border-0 text-xs`}>{st.label}</Badge>
                     {totalDefectQty > 0 && <Badge variant="outline" className="bg-red-500/15 text-red-600 dark:text-red-400 border-0 text-xs">有坏品退货</Badge>}
@@ -977,7 +977,7 @@ export default function PurchasingPage() {
                   <div className="grid grid-cols-4 gap-4">
                     <div>
                       <p className="text-[11px] text-muted-foreground mb-1">采购单号</p>
-                      <p className="font-mono font-bold text-amber-700">{viewPO.poNumber}</p>
+                      <p className="font-mono font-bold text-gold-700">{viewPO.poNumber}</p>
                     </div>
                     <div>
                       <p className="text-[11px] text-muted-foreground mb-1">供应商</p>

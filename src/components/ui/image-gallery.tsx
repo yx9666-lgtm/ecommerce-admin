@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, X, Package } from "lucide-react";
+import { ChevronLeft, ChevronRight, Package } from "lucide-react";
 
 interface ImageGalleryProps {
   images: string[];
@@ -41,7 +41,7 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
               className="w-full h-full rounded-lg object-cover"
             />
             {images.length > 1 && (
-              <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 bg-gold-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
                 {images.length}
               </span>
             )}
@@ -56,15 +56,6 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl p-0 bg-black/95 border-0 overflow-hidden">
           <DialogTitle className="sr-only">商品图片</DialogTitle>
-          {/* Close button */}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-3 right-3 z-10 text-white/70 hover:text-white hover:bg-white/10"
-            onClick={() => setOpen(false)}
-          >
-            <X className="h-5 w-5" />
-          </Button>
 
           {/* Main image */}
           <div className="relative flex items-center justify-center min-h-[400px] max-h-[70vh]">

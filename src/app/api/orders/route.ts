@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 const orderItemSchema = z.object({
   name: z.string().min(1),
@@ -40,6 +41,8 @@ const CODE_TO_PLATFORM: Record<string, string> = {
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.orders.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);
@@ -65,7 +68,24 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     prisma.order.findMany({
       where,
       include: {
-        items: { select: { id: true, name: true, sku: true, quantity: true, unitPrice: true, totalPrice: true } },
+        items: {
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            quantity: true,
+            unitPrice: true,
+            totalPrice: true,
+            product: {
+              select: {
+                images: {
+                  select: { url: true },
+                  orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+                },
+              },
+            },
+          },
+        },
         customer: { select: { id: true, name: true } },
         channel: { select: { id: true, name: true, code: true, color: true, shopUsername: true } },
         shipment: { select: { id: true, carrier: true, trackingNumber: true, status: true } },
@@ -78,12 +98,53 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     prisma.order.count({ where }),
   ]);
 
-  return NextResponse.json({ items: orders, total, page, pageSize });
+  const missingSkus = Array.from(
+    new Set(
+      orders.flatMap((o) =>
+        o.items
+          .filter((i) => !i.product?.images?.[0]?.url && i.sku)
+          .map((i) => i.sku as string)
+      )
+    )
+  );
+
+  const skuImageMap = new Map<string, string[]>();
+  if (missingSkus.length > 0) {
+    const products = await prisma.product.findMany({
+      where: { storeId, sku: { in: missingSkus } },
+      select: {
+        sku: true,
+        images: {
+          select: { url: true },
+          orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
+        },
+      },
+    });
+    products.forEach((p) => {
+      const urls = p.images.map((img) => img.url).filter(Boolean);
+      if (urls.length > 0) skuImageMap.set(p.sku, urls);
+    });
+  }
+
+  const items = orders.map((order) => ({
+    ...order,
+    items: order.items.map((item) => {
+      const direct = (item.product?.images || []).map((img) => img.url).filter(Boolean);
+      const fallback = item.sku ? skuImageMap.get(item.sku) || [] : [];
+      const imageUrls = direct.length > 0 ? direct : fallback;
+      const { product, ...rest } = item;
+      return { ...rest, imageUrls };
+    }),
+  }));
+
+  return NextResponse.json({ items, total, page, pageSize });
 });
 
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.orders.create);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, createOrderSchema);
@@ -115,7 +176,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   }
 
   const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-  if (!channel) {
+  if (!channel || channel.storeId !== storeId) {
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
   }
 

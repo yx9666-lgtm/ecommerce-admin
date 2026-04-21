@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
 // ─── GET: return current store info ─────────────────────────────────────────
 
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const store = await prisma.store.findUnique({
@@ -52,6 +55,8 @@ const updateStoreSchema = z.object({
 export const PUT = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.edit);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, updateStoreSchema);

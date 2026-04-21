@@ -3,12 +3,15 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { requirePermission, PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
 
 // ─── GET: list users belonging to the current store ─────────────────────────
 
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const storeUsers = await prisma.storeUser.findMany({
@@ -38,7 +41,7 @@ export const GET = withTryCatch(async () => {
 const createUserSchema = z.object({
   displayName: z.string().min(1, "Display name is required"),
   username: z.string().min(1, "Username is required"),
-  email: z.string().email("Invalid email"),
+  email: z.string().email("Invalid email").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
   role: z.enum(["SUPER_ADMIN", "STORE_ADMIN", "OPERATOR", "CUSTOMER_SERVICE", "FINANCE"]),
 });
@@ -46,16 +49,30 @@ const createUserSchema = z.object({
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const { storeId } = ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.settings.create);
+  if (denied) return denied;
+  const { storeId, role } = ctx;
+
+  // Only SUPER_ADMIN and STORE_ADMIN can create users
+  if (role !== "SUPER_ADMIN" && role !== "STORE_ADMIN") {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
+  }
 
   const body = await parseBody(req, createUserSchema);
   if (body instanceof NextResponse) return body;
 
+  // Non-SUPER_ADMIN cannot create SUPER_ADMIN users
+  if (body.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Cannot create SUPER_ADMIN user" }, { status: 403 });
+  }
+
   // Check uniqueness
+  const orConditions: any[] = [{ username: body.username }];
+  if (body.email) {
+    orConditions.push({ email: body.email });
+  }
   const existing = await prisma.user.findFirst({
-    where: {
-      OR: [{ username: body.username }, { email: body.email }],
-    },
+    where: { OR: orConditions },
   });
   if (existing) {
     return NextResponse.json(
@@ -65,12 +82,13 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   }
 
   const passwordHash = await bcrypt.hash(body.password, 10);
+  const email = body.email || `${body.username}@local`;
 
   const user = await prisma.user.create({
     data: {
       displayName: body.displayName,
       username: body.username,
-      email: body.email,
+      email,
       passwordHash,
       role: body.role,
     },
@@ -85,9 +103,13 @@ export const POST = withTryCatch(async (req: NextRequest) => {
     },
   });
 
-  // Link user to the current store
+  // Link user to the current store with default permissions based on role
   await prisma.storeUser.create({
-    data: { storeId, userId: user.id },
+    data: {
+      storeId,
+      userId: user.id,
+      permissions: DEFAULT_ROLE_PERMISSIONS[body.role] || {},
+    },
   });
 
   return NextResponse.json(user, { status: 201 });

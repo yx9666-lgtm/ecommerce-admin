@@ -22,6 +22,8 @@ import {
   TrendingUp,
   DollarSign,
   Eye,
+  Edit,
+  Trash2,
   BarChart3,
   Loader2,
 } from "lucide-react";
@@ -30,7 +32,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 // ─── Static Config ──────────────────────────────────────────────────────────
 
 const typeIcons: Record<string, { icon: any; color: string }> = {
-  "Flash Sale": { icon: Zap, color: "bg-amber-500/15 text-amber-600 dark:text-amber-400" },
+  "Flash Sale": { icon: Zap, color: "bg-gold-400/15 text-gold-600 dark:text-gold-400" },
   "Discount": { icon: DollarSign, color: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400" },
   "Coupon": { icon: Gift, color: "bg-purple-500/15 text-purple-600 dark:text-purple-400" },
   "Bundle": { icon: BarChart3, color: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
@@ -93,8 +95,11 @@ export default function MarketingPage() {
   const t = useTranslations("marketing");
   const tc = useTranslations("common");
   const [showDialog, setShowDialog] = useState(false);
+  const [editingPromo, setEditingPromo] = useState<Promotion | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 20;
 
   // API data
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -134,6 +139,7 @@ export default function MarketingPage() {
   }, [fetchPromotions]);
 
   const resetForm = () => {
+    setEditingPromo(null);
     setFormNameEn("");
     setFormNameZh("");
     setFormType("");
@@ -148,8 +154,11 @@ export default function MarketingPage() {
     if (!formNameEn || !formNameZh || !formType || !formStartDate || !formEndDate) return;
     try {
       setSubmitting(true);
-      const res = await fetch("/api/promotions", {
-        method: "POST",
+      const isEditing = !!editingPromo;
+      const url = isEditing ? `/api/promotions/${editingPromo!.id}` : "/api/promotions";
+      const method = isEditing ? "PUT" : "POST";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nameEn: formNameEn,
@@ -162,14 +171,37 @@ export default function MarketingPage() {
           budget: formBudget ? parseFloat(formBudget) : null,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create");
+      if (!res.ok) throw new Error("Failed");
       setShowDialog(false);
       resetForm();
       await fetchPromotions();
     } catch (err) {
-      console.error("Failed to create promotion:", err);
+      console.error("Failed:", err);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const openEditPromo = (promo: Promotion) => {
+    setEditingPromo(promo);
+    setFormNameEn(promo.nameEn);
+    setFormNameZh(promo.nameZh);
+    setFormType(promo.type);
+    setFormPlatform(promo.platform || "");
+    setFormDiscount(promo.discount != null ? String(promo.discount) : "");
+    setFormStartDate(promo.startDate.slice(0, 10));
+    setFormEndDate(promo.endDate.slice(0, 10));
+    setFormBudget(promo.budget != null ? String(promo.budget) : "");
+    setShowDialog(true);
+  };
+
+  const handleDeletePromo = async (id: string) => {
+    if (!confirm("确定删除此营销活动？")) return;
+    try {
+      await fetch(`/api/promotions/${id}`, { method: "DELETE" });
+      await fetchPromotions();
+    } catch (err) {
+      console.error("Delete failed:", err);
     }
   };
 
@@ -180,7 +212,7 @@ export default function MarketingPage() {
       date: formatDateRange(p.startDate, p.endDate),
       event: p.nameEn,
       platform: p.platform || "All",
-      color: p.platform ? (platformColors[p.platform] || "bg-gray-500") : "bg-amber-600",
+      color: p.platform ? (platformColors[p.platform] || "bg-gray-500") : "bg-gold-600",
     }));
 
   if (loading) {
@@ -232,12 +264,13 @@ export default function MarketingPage() {
                     <TableHead>{t("endDate")}</TableHead>
                     <TableHead>{t("budget")}</TableHead>
                     <TableHead>{t("status")}</TableHead>
+                    <TableHead className="w-20">{tc("actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {promotions.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         No promotions found
                       </TableCell>
                     </TableRow>
@@ -270,6 +303,12 @@ export default function MarketingPage() {
                             </div>
                           </TableCell>
                           <TableCell><Badge variant={statusVariants[promo.status] || "default"}>{promo.status}</Badge></TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditPromo(promo)}><Edit className="h-3.5 w-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500" onClick={() => handleDeletePromo(promo.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       );
                     })
@@ -278,6 +317,17 @@ export default function MarketingPage() {
               </Table>
             </CardContent>
           </Card>
+          {promotions.length > pageSize && (
+            <div className="flex items-center justify-between mt-3">
+              <span className="text-sm text-muted-foreground">
+                共 {promotions.length} 条
+              </span>
+              <div className="flex gap-1">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
+                <Button variant="outline" size="sm" disabled={page * pageSize >= promotions.length} onClick={() => setPage(p => p + 1)}>下一页</Button>
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="calendar" className="mt-4">
@@ -309,12 +359,12 @@ export default function MarketingPage() {
       {/* Add Promotion Dialog */}
       <Dialog open={showDialog} onOpenChange={(open) => { setShowDialog(open); if (!open) resetForm(); }}>
         <DialogContent className="max-w-lg p-0">
-          <div className="bg-gradient-to-r from-amber-500 to-orange-600 px-6 py-5 text-white rounded-t-lg">
+          <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Megaphone className="h-5 w-5" />
-              {t("addPromotion")}
+              {editingPromo ? t("editPromotion") : t("addPromotion")}
             </DialogTitle>
-            <DialogDescription className="text-amber-200 mt-1">
+            <DialogDescription className="text-gold-200 mt-1">
               Create a new marketing campaign
             </DialogDescription>
           </div>
