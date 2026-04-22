@@ -49,8 +49,11 @@ import {
 } from "lucide-react";
 import { DateInput } from "@/components/ui/date-input";
 import { PasswordConfirmDialog } from "@/components/password-confirm";
+import { ImageGallery } from "@/components/ui/image-gallery";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
+import { buildSkuFromSerial, normalizeSkuConfig, type SkuConfig } from "@/lib/sku-config";
+import { normalizeImageUrl } from "@/lib/image-url";
 
 interface Supplier {
   id: string;
@@ -60,6 +63,11 @@ interface Supplier {
 interface Warehouse {
   id: string;
   name: string;
+}
+interface ProductLite {
+  sku: string;
+  nameZh: string;
+  nameEn: string;
 }
 interface POItem {
   productName: string;
@@ -119,6 +127,7 @@ export default function PurchasingPage() {
   const [pos, setPOs] = useState<PO[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [productCatalog, setProductCatalog] = useState<ProductLite[]>([]);
   const [categories, setCategories] = useState<{ id: string; nameZh: string; nameEn: string }[]>([]);
   const [dbRates, setDbRates] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -233,26 +242,28 @@ export default function PurchasingPage() {
   });
 
   const [items, setItems] = useState<POItem[]>([
-    { productName: "", sku: "RJ-1001", categoryId: "", specs: [], images: [], quantity: "", unitCost: "" },
+    { productName: "", sku: "", categoryId: "", specs: [], images: [], quantity: "", unitCost: "" },
   ]);
   const [poStats, setPoStats] = useState({ totalSpend: 0, pendingCount: 0, totalPOs: 0 });
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [poRes, supRes, whRes, catRes, rateRes] = await Promise.all([
+      const [poRes, supRes, whRes, catRes, rateRes, productRes] = await Promise.all([
         fetch("/api/purchasing"),
         fetch("/api/suppliers"),
         fetch("/api/warehouses"),
         fetch("/api/categories"),
         fetch("/api/exchange-rates"),
+        fetch("/api/products?page=1&pageSize=1000"),
       ]);
-      const [poData, supData, whData, catData, rateData] = await Promise.all([
+      const [poData, supData, whData, catData, rateData, productData] = await Promise.all([
         poRes.json(),
         supRes.json(),
         whRes.json(),
         catRes.json(),
         rateRes.json(),
+        productRes.json(),
       ]);
       const poItems = poData.items || [];
       setPOs(poItems);
@@ -265,6 +276,11 @@ export default function PurchasingPage() {
       }
       setDbRates(ratesMap);
       setWarehouses(whData.items || []);
+      setProductCatalog((productData?.items || []).map((p: any) => ({
+        sku: p.sku || "",
+        nameZh: p.nameZh || "",
+        nameEn: p.nameEn || "",
+      })));
       setPoStats({
         totalSpend: poData.stats?.totalSpend || 0,
         pendingCount: poData.stats?.pendingCount || 0,
@@ -286,20 +302,62 @@ export default function PurchasingPage() {
   }, [loadData]);
   useAutoRefresh(loadData);
 
-  const [nextSkuNum, setNextSkuNum] = useState(1001);
+  const [nextSkuBaseSerial, setNextSkuBaseSerial] = useState(1001);
+  const [nextSkuConfig, setNextSkuConfig] = useState<SkuConfig>(
+    normalizeSkuConfig(undefined, "RJ", "1001")
+  );
 
   const fetchNextSku = useCallback(async () => {
     try {
       const res = await fetch("/api/products/next-sku");
       const data = await res.json();
-      const num = parseInt((data.sku || "RJ-1001").replace("RJ-", ""), 10);
-      setNextSkuNum(isNaN(num) ? 1001 : num);
-    } catch { setNextSkuNum(1001); }
+      const config = normalizeSkuConfig(data?.skuConfig, "RJ", "1001");
+      const serial = typeof data?.nextSerial === "number" ? data.nextSerial : parseInt(config.serialStartNo, 10) || 1001;
+      setNextSkuConfig(config);
+      setNextSkuBaseSerial(serial);
+    } catch {
+      setNextSkuConfig(normalizeSkuConfig(undefined, "RJ", "1001"));
+      setNextSkuBaseSerial(1001);
+    }
   }, []);
 
   useEffect(() => { fetchNextSku(); }, [fetchNextSku]);
 
-  const getAutoSku = (index: number) => `RJ-${nextSkuNum + index}`;
+  const getAutoSku = useCallback(
+    (index: number) => buildSkuFromSerial(nextSkuConfig, nextSkuBaseSerial + index),
+    [nextSkuConfig, nextSkuBaseSerial]
+  );
+
+  const findSkuByName = useCallback((name: string) => {
+    const normalized = name.trim().toLowerCase();
+    if (!normalized) return null;
+    const matched = productCatalog.find((product) =>
+      [product.nameZh, product.nameEn]
+        .filter(Boolean)
+        .some((candidate) => candidate.trim().toLowerCase() === normalized)
+    );
+    return matched?.sku || null;
+  }, [productCatalog]);
+
+  const getDraftSkuForIndex = useCallback((itemsList: POItem[], targetIndex: number) => {
+    let draftOffset = 0;
+    for (let index = 0; index <= targetIndex; index++) {
+      const current = itemsList[index];
+      const matchedSku = findSkuByName(current?.productName || "");
+      if (matchedSku) continue;
+      if (editingPoId && current?.sku) continue;
+      if (index === targetIndex) return getAutoSku(draftOffset);
+      draftOffset += 1;
+    }
+    return getAutoSku(draftOffset);
+  }, [findSkuByName, editingPoId, getAutoSku]);
+
+  const resolveSkuForItem = useCallback((item: POItem, index: number, itemsList: POItem[]) => {
+    const matchedSku = findSkuByName(item.productName);
+    if (matchedSku) return matchedSku;
+    if (editingPoId && item.sku) return item.sku;
+    return getDraftSkuForIndex(itemsList, index);
+  }, [findSkuByName, editingPoId, getDraftSkuForIndex]);
 
   const handleCurrencyChange = (currency: string) => {
     const rate = dbRates[currency] || 1;
@@ -307,7 +365,7 @@ export default function PurchasingPage() {
   };
 
   const handleAddItem = () =>
-    setItems([...items, { productName: "", sku: getAutoSku(items.length), categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
+    setItems((prev) => [...prev, { productName: "", sku: "", categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
 
   const handleRemoveItem = (i: number) => {
     if (items.length <= 1) return;
@@ -333,7 +391,7 @@ export default function PurchasingPage() {
     try {
       const url = editingPoId ? `/api/purchasing/${editingPoId}` : "/api/purchasing";
       const method = editingPoId ? "PUT" : "POST";
-      await fetch(url, {
+      const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -342,15 +400,20 @@ export default function PurchasingPage() {
             ...item,
             quantity: Number(item.quantity) || 0,
             unitCost: Number(item.unitCost) || 0,
-            sku: editingPoId ? item.sku : getAutoSku(idx),
+            sku: resolveSkuForItem(item, idx, validItems),
           })),
         }),
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || "保存采购单失败");
+      }
       setShowDialog(false);
       resetForm();
       loadData();
     } catch (e) {
       console.error(e);
+      alert(e instanceof Error ? e.message : "保存采购单失败");
     }
     setSaving(false);
   };
@@ -360,19 +423,32 @@ export default function PurchasingPage() {
   const handleImageUpload = async (index: number, files: FileList) => {
     setUploadingIdx(index);
     const newImages = [...items[index].images];
+    let uploadError = "";
     for (let f = 0; f < files.length; f++) {
       const formData = new FormData();
       formData.append("file", files[f]);
       try {
         const res = await fetch("/api/upload", { method: "POST", body: formData });
-        const data = await res.json();
-        if (data.url) newImages.push(data.url);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (res.status === 429) {
+            const retryAfter = res.headers.get("Retry-After");
+            uploadError = retryAfter ? `上传太频繁，请 ${retryAfter} 秒后再试` : "上传太频繁，请稍后再试";
+          } else {
+            uploadError = data?.error || "图片上传失败";
+          }
+          break;
+        }
+        if (data?.url) newImages.push(data.url);
       } catch (e) {
         console.error("Upload failed:", e);
+        uploadError = "网络异常，图片上传失败";
+        break;
       }
     }
     updateItem(index, "images", newImages);
     setUploadingIdx(null);
+    if (uploadError) alert(uploadError);
   };
 
   const removeImage = (itemIndex: number, imgIndex: number) => {
@@ -395,7 +471,7 @@ export default function PurchasingPage() {
       tax: 0,
     });
     fetchNextSku();
-    setItems([{ productName: "", sku: getAutoSku(0), categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
+    setItems([{ productName: "", sku: "", categoryId: "", specs: [], images: [], quantity: "", unitCost: "" }]);
   };
 
   const totalSpend = poStats.totalSpend;
@@ -498,7 +574,7 @@ export default function PurchasingPage() {
                         {po.poNumber}
                       </TableCell>
                       <TableCell className="text-sm">
-                        {formatDate(po.createdAt)}
+                        {formatDate(po.expectedDate || po.createdAt)}
                       </TableCell>
                       <TableCell className="text-sm font-mono">
                         {po.supplier?.supplierNo ? po.supplier.supplierNo.replace("SUP-", "") : po.supplier?.name || "-"}
@@ -719,7 +795,7 @@ export default function PurchasingPage() {
 
             {/* Section 3: Items */}
             <div>
-              <div className="flex justify-between items-center mb-3">
+              <div className="mb-3">
                 <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <div className="w-5 h-5 bg-gold-400/15 rounded flex items-center justify-center text-xs font-bold text-gold-700">
                     3
@@ -727,16 +803,6 @@ export default function PurchasingPage() {
                   <Package className="h-4 w-4" />
                   {t("items")}
                 </h4>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1 text-gold-700 border-gold-200 hover:bg-gold-50"
-                  onClick={handleAddItem}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("addItem")}
-                </Button>
               </div>
 
               <div className="space-y-3">
@@ -751,7 +817,7 @@ export default function PurchasingPage() {
                         <div className="col-span-2 space-y-1">
                           <Label className="text-[10px] text-muted-foreground">SKU (自动)</Label>
                           <div className="h-10 flex items-center bg-gold-50 rounded-md px-3 border border-gold-100">
-                            <span className="font-mono text-sm font-bold text-gold-700">{getAutoSku(i)}</span>
+                            <span className="font-mono text-sm font-bold text-gold-700">{resolveSkuForItem(item, i, items)}</span>
                           </div>
                         </div>
                         <div className="col-span-4 space-y-1">
@@ -808,7 +874,7 @@ export default function PurchasingPage() {
                           <div className="flex gap-2 flex-wrap items-center">
                             {item.images.map((img, imgIdx) => (
                               <div key={imgIdx} className="relative group/img">
-                                <img src={img} alt="" className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow" />
+                                <img src={normalizeImageUrl(img)} alt="" className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow" />
                                 <button type="button" onClick={() => removeImage(i, imgIdx)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity">×</button>
                               </div>
                             ))}
@@ -838,6 +904,18 @@ export default function PurchasingPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-gold-700 border-gold-200 hover:bg-gold-50"
+                  onClick={handleAddItem}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("addItem")}
+                </Button>
               </div>
             </div>
 
@@ -929,23 +1007,25 @@ export default function PurchasingPage() {
 
           {/* Footer */}
           <div className="border-t bg-muted px-6 py-4 flex justify-end gap-3 rounded-b-lg">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowDialog(false);
-                resetForm();
-              }}
-            >
-              {tc("cancel")}
-            </Button>
-            <Button
-              className="gap-1.5 px-6"
-              onClick={handleSubmit}
-              disabled={saving}
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {tc("save")}
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDialog(false);
+                  resetForm();
+                }}
+              >
+                {tc("cancel")}
+              </Button>
+              <Button
+                className="gap-1.5 px-6"
+                onClick={handleSubmit}
+                disabled={saving}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                {tc("save")}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -984,8 +1064,8 @@ export default function PurchasingPage() {
                       <p className="font-semibold">{viewPO.supplier?.supplierNo ? viewPO.supplier.supplierNo.replace("SUP-", "") : "-"} <span className="text-muted-foreground font-normal">{viewPO.supplier?.name}</span></p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-muted-foreground mb-1">预计到货</p>
-                      <p className="text-sm">{viewPO.expectedDate ? formatDate(viewPO.expectedDate) : "-"}</p>
+                      <p className="text-[11px] text-muted-foreground mb-1">采购日期</p>
+                      <p className="text-sm">{formatDate(viewPO.expectedDate || viewPO.createdAt)}</p>
                     </div>
                     <div>
                       <p className="text-[11px] text-muted-foreground mb-1">创建时间</p>
@@ -1077,13 +1157,10 @@ export default function PurchasingPage() {
                               <TableCell className="text-sm">{item.productName}</TableCell>
                               <TableCell className="font-mono text-sm whitespace-nowrap">{item.sku || "-"}</TableCell>
                               <TableCell>
-                                <div className="flex gap-1 justify-center">
-                                  {(item.images || []).slice(0, 3).map((img: string, i: number) => (
-                                    <img key={i} src={img} alt="" className="w-10 h-10 object-cover rounded border" />
-                                  ))}
-                                  {(item.images || []).length > 3 && <span className="text-xs text-muted-foreground self-center">+{item.images.length - 3}</span>}
-                                  {(!item.images || item.images.length === 0) && <span className="text-xs text-muted-foreground">-</span>}
-                                </div>
+                                <ImageGallery
+                                  images={Array.isArray(item.images) ? item.images : []}
+                                  alt={item.productName || ""}
+                                />
                               </TableCell>
                               <TableCell className="text-sm whitespace-nowrap">{item.categoryId ? (categories.find(c => c.id === item.categoryId)?.nameZh || "-") : "-"}</TableCell>
                               <TableCell className="text-xs whitespace-nowrap">

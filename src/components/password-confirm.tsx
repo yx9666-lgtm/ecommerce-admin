@@ -43,8 +43,8 @@ export function PasswordConfirmDialog({ open, onClose, onConfirm, action, itemNa
       } else {
         setError("密码错误，请重试");
       }
-    } catch {
-      setError("验证失败，请重试");
+    } catch (err: any) {
+      setError(err?.message || "验证失败，请重试");
     }
     setLoading(false);
   };

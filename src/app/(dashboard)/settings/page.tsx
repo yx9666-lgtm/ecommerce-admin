@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/auth-store";
 import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from "@/lib/permissions";
+import { buildSkuFromSerial, normalizeSkuConfig, type SkuConfig } from "@/lib/sku-config";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Settings,
@@ -80,6 +81,7 @@ type StoreInfo = {
   supplierStartNo: string;
   poPrefix: string;
   lowStockThreshold: number;
+  skuConfig?: SkuConfig;
 };
 
 type LogItem = {
@@ -135,8 +137,11 @@ export default function SettingsPage() {
   const [storeCurrency, setStoreCurrency] = useState("MYR");
   const [storeTimezone, setStoreTimezone] = useState("Asia/Kuala_Lumpur");
   const [storeDescription, setStoreDescription] = useState("");
-  const [skuPrefix, setSkuPrefix] = useState("RJ");
-  const [skuStartNo, setSkuStartNo] = useState("1001");
+  const [skuPartCount, setSkuPartCount] = useState("2");
+  const [skuSerialPart, setSkuSerialPart] = useState("2");
+  const [skuSeparator, setSkuSeparator] = useState("-");
+  const [skuSerialStartNo, setSkuSerialStartNo] = useState("1001");
+  const [skuParts, setSkuParts] = useState<string[]>(["RJ", "", "", "", ""]);
   const [supplierPrefix, setSupplierPrefix] = useState("SUP");
   const [supplierStartNo, setSupplierStartNo] = useState("001");
   const [poPrefix, setPoPrefix] = useState("RJ");
@@ -238,8 +243,18 @@ export default function SettingsPage() {
         setStoreCurrency(data.currency);
         setStoreTimezone(data.timezone);
         setStoreDescription(data.description ?? "");
-        setSkuPrefix(data.skuPrefix || "RJ");
-        setSkuStartNo(data.skuStartNo || "1001");
+        const config = normalizeSkuConfig(data.skuConfig, data.skuPrefix, data.skuStartNo);
+        setSkuPartCount(String(config.partCount));
+        setSkuSerialPart(String(config.serialPart));
+        setSkuSeparator(config.separator);
+        setSkuSerialStartNo(config.serialStartNo);
+        setSkuParts([
+          config.parts[0] || "",
+          config.parts[1] || "",
+          config.parts[2] || "",
+          config.parts[3] || "",
+          config.parts[4] || "",
+        ]);
         setSupplierPrefix(data.supplierPrefix || "SUP");
         setSupplierStartNo(data.supplierStartNo || "001");
         setPoPrefix(data.poPrefix || "RJ");
@@ -353,12 +368,50 @@ export default function SettingsPage() {
     fetchNotifications();
   }, [fetchUsers, fetchStore, fetchLogs, fetchCategories, fetchBrands, fetchUnits, fetchExchangeRates, fetchNotifications]);
 
+  useEffect(() => {
+    const count = Math.max(1, Math.min(5, parseInt(skuPartCount, 10) || 2));
+    const currentSerial = parseInt(skuSerialPart, 10) || 2;
+    if (currentSerial > count) {
+      setSkuSerialPart(String(count));
+    }
+  }, [skuPartCount, skuSerialPart]);
+
   // ── Handlers ──
 
   const handleSaveStore = async () => {
     setStoreSaving(true);
     setStoreMsg(null);
     try {
+      const partCount = Math.max(1, Math.min(5, parseInt(skuPartCount, 10) || 2));
+      const serialPart = Math.max(1, Math.min(partCount, parseInt(skuSerialPart, 10) || 2));
+      const activeParts = skuParts.slice(0, partCount).map((part) => part.trim().toUpperCase());
+
+      for (let index = 0; index < partCount; index++) {
+        if (index + 1 === serialPart) continue;
+        if (!activeParts[index]) {
+          setStoreMsg({
+            type: "error",
+            text: t("skuPartRequired", { part: String(index + 1) }),
+          });
+          setStoreSaving(false);
+          return;
+        }
+      }
+      if (!/^\d+$/.test(skuSerialStartNo.trim())) {
+        setStoreMsg({ type: "error", text: t("skuSerialStartInvalid") });
+        setStoreSaving(false);
+        return;
+      }
+
+      const skuConfig = {
+        partCount,
+        serialPart,
+        separator: (skuSeparator || "-").trim() || "-",
+        serialStartNo: skuSerialStartNo.trim(),
+        parts: activeParts,
+      };
+      const legacySkuPrefix = activeParts.find((_, idx) => idx + 1 !== serialPart) || "RJ";
+
       const res = await fetch("/api/settings/store", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -367,8 +420,9 @@ export default function SettingsPage() {
           currency: storeCurrency,
           timezone: storeTimezone,
           description: storeDescription || null,
-          skuPrefix,
-          skuStartNo,
+          skuPrefix: legacySkuPrefix,
+          skuStartNo: skuConfig.serialStartNo,
+          skuConfig,
           supplierPrefix,
           supplierStartNo,
           poPrefix,
@@ -724,6 +778,29 @@ export default function SettingsPage() {
     return d.toLocaleString("en-MY", { dateStyle: "short", timeStyle: "short" });
   };
 
+  const skuPartCountNum = Math.max(1, Math.min(5, parseInt(skuPartCount, 10) || 2));
+  const skuSerialPartNum = Math.max(1, Math.min(skuPartCountNum, parseInt(skuSerialPart, 10) || 2));
+  const skuPreviewConfig = normalizeSkuConfig(
+    {
+      partCount: skuPartCountNum,
+      serialPart: skuSerialPartNum,
+      separator: (skuSeparator || "-").trim() || "-",
+      serialStartNo: skuSerialStartNo || "1001",
+      parts: skuParts.slice(0, skuPartCountNum),
+    },
+    "RJ",
+    skuSerialStartNo || "1001"
+  );
+  const skuPreview = buildSkuFromSerial(
+    skuPreviewConfig,
+    parseInt(skuPreviewConfig.serialStartNo, 10) || 1001
+  );
+  const updateSkuPart = (index: number, value: string) => {
+    const next = [...skuParts];
+    next[index] = value.toUpperCase();
+    setSkuParts(next);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -801,14 +878,69 @@ export default function SettingsPage() {
                   <div>
                     <h3 className="text-sm font-semibold mb-1">{t("prefixTitle")}</h3>
                     <p className="text-xs text-muted-foreground mb-3">{t("prefixDesc")}</p>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-2">
-                        <Label>{t("skuPrefix")}</Label>
-                        <div className="flex gap-2">
-                          <Input value={skuPrefix} onChange={(e) => setSkuPrefix(e.target.value.toUpperCase())} maxLength={10} placeholder="RJ" className="w-24" />
-                          <Input value={skuStartNo} onChange={(e) => setSkuStartNo(e.target.value)} placeholder="1001" className="w-24" />
+                    <div className="grid grid-cols-4 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <Label>{t("skuUniversalTitle")}</Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          <Select value={skuPartCount} onValueChange={setSkuPartCount}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">1</SelectItem>
+                              <SelectItem value="2">2</SelectItem>
+                              <SelectItem value="3">3</SelectItem>
+                              <SelectItem value="4">4</SelectItem>
+                              <SelectItem value="5">5</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Select value={skuSerialPart} onValueChange={setSkuSerialPart}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: skuPartCountNum }, (_, i) => (
+                                <SelectItem key={i + 1} value={String(i + 1)}>
+                                  {t("skuSerialPartLabel", { part: String(i + 1) })}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            value={skuSeparator}
+                            onChange={(e) => setSkuSeparator(e.target.value)}
+                            placeholder="-"
+                            maxLength={3}
+                          />
                         </div>
-                        <p className="text-[11px] text-muted-foreground">{t("skuPrefixDesc")}</p>
+                        <div className="grid grid-cols-5 gap-2">
+                          {Array.from({ length: skuPartCountNum }, (_, i) => {
+                            const isSerial = i + 1 === skuSerialPartNum;
+                            return (
+                              <Input
+                                key={i}
+                                value={isSerial ? "" : (skuParts[i] || "")}
+                                onChange={(e) => updateSkuPart(i, e.target.value)}
+                                placeholder={
+                                  isSerial
+                                    ? t("skuSerialPlaceholder")
+                                    : t("skuPartPlaceholder", { part: String(i + 1) })
+                                }
+                                disabled={isSerial}
+                              />
+                            );
+                          })}
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            value={skuSerialStartNo}
+                            onChange={(e) => setSkuSerialStartNo(e.target.value)}
+                            placeholder="1001"
+                            className="w-32"
+                          />
+                          <Input value={skuPreview} disabled />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{t("skuUniversalDesc")}</p>
                       </div>
                       <div className="space-y-2">
                         <Label>{t("supplierStartNo")}</Label>

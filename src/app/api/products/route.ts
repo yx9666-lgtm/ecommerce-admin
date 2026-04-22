@@ -35,7 +35,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         select: { id: true, sku: true, nameZh: true, nameEn: true, sellingPrice: true },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { updatedAt: "desc" },
+        orderBy: { sku: "asc" },
       }),
       prisma.product.count({ where }),
     ]);
@@ -62,7 +62,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: { updatedAt: "desc" },
+      orderBy: { sku: "asc" },
     }),
     prisma.product.count({ where }),
   ]);

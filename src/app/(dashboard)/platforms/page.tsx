@@ -27,6 +27,7 @@ import {
   Pencil,
   Power,
   PowerOff,
+  Trash2,
   Loader2,
   Store,
   ShoppingCart,
@@ -41,6 +42,7 @@ import {
   Boxes,
 } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
+import { PasswordConfirmDialog } from "@/components/password-confirm";
 
 interface Channel {
   id: string;
@@ -116,6 +118,10 @@ export default function ChannelsPage() {
   const [formShopUsername, setFormShopUsername] = useState("");
   const [formShopUrl, setFormShopUrl] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [pwAction, setPwAction] = useState<"edit" | "delete">("delete");
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwItemName, setPwItemName] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -235,7 +241,10 @@ export default function ChannelsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: channel.id, isActive: !channel.isActive }),
       });
-      if (!res.ok) throw new Error(tc("error"));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || tc("error"));
+      }
       fetchChannels();
     } catch (err: any) {
       setError(err.message);
@@ -243,16 +252,47 @@ export default function ChannelsPage() {
   };
 
   const openEditDialog = (ch: Channel) => {
-    setEditTarget(ch);
-    setFormName(ch.name);
-    setFormCode(ch.code);
-    setFormType(ch.type);
-    setFormColor(ch.color || "#6b7280");
-    setFormShopName(ch.shopName || "");
-    setFormShopUsername(ch.shopUsername || "");
-    setFormShopUrl(ch.shopUrl || "");
-    setFormNotes(ch.notes || "");
-    setShowEditDialog(true);
+    setPwAction("edit");
+    setPwItemName(ch.name);
+    setPendingAction(() => async () => {
+      setEditTarget(ch);
+      setFormName(ch.name);
+      setFormCode(ch.code);
+      setFormType(ch.type);
+      setFormColor(ch.color || "#6b7280");
+      setFormShopName(ch.shopName || "");
+      setFormShopUsername(ch.shopUsername || "");
+      setFormShopUrl(ch.shopUrl || "");
+      setFormNotes(ch.notes || "");
+      setShowEditDialog(true);
+    });
+    setPwOpen(true);
+  };
+
+  const openToggleActive = (ch: Channel) => {
+    setPwAction("edit");
+    setPwItemName(ch.name);
+    setPendingAction(() => async () => {
+      await handleToggleActive(ch);
+    });
+    setPwOpen(true);
+  };
+
+  const openDeleteChannel = (ch: Channel) => {
+    setPwAction("delete");
+    setPwItemName(ch.name);
+    setPendingAction(() => async () => {
+      const res = await fetch(`/api/channels?id=${encodeURIComponent(ch.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || tc("error"));
+      }
+      setSuccessMsg(t("channelDeleted"));
+      fetchChannels();
+    });
+    setPwOpen(true);
   };
 
   if (loading) {
@@ -496,7 +536,7 @@ export default function ChannelsPage() {
                       ? "text-destructive hover:text-destructive"
                       : "text-emerald-600 hover:text-emerald-600"
                   }`}
-                  onClick={() => handleToggleActive(ch)}
+                  onClick={() => openToggleActive(ch)}
                 >
                   {ch.isActive ? (
                     <PowerOff className="h-3.5 w-3.5" />
@@ -504,6 +544,15 @@ export default function ChannelsPage() {
                     <Power className="h-3.5 w-3.5" />
                   )}
                   {ch.isActive ? t("disable") : t("enable")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1 text-destructive hover:text-destructive"
+                  onClick={() => openDeleteChannel(ch)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {tc("delete")}
                 </Button>
               </div>
             </CardContent>
@@ -607,6 +656,14 @@ export default function ChannelsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <PasswordConfirmDialog
+        open={pwOpen}
+        onClose={() => setPwOpen(false)}
+        onConfirm={async () => { if (pendingAction) await pendingAction(); }}
+        action={pwAction}
+        itemName={pwItemName}
+      />
     </div>
   );
 }

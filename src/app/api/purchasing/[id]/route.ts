@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { getAuthContext, withTryCatch, assertStoreOwnership, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
@@ -241,17 +242,46 @@ export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
   if (skus.length > 0) {
     const products = await prisma.product.findMany({
       where: { storeId, sku: { in: skus } },
-      select: { id: true, sku: true },
+      select: {
+        id: true,
+        sku: true,
+        _count: { select: { orderItems: true } },
+        variants: {
+          select: {
+            channelInventory: {
+              select: { id: true, allocated: true, reserved: true },
+            },
+          },
+        },
+      },
     });
-    const productMap = new Map(products.map((p) => [p.sku, p.id]));
+    const productMap = new Map(products.map((p) => [p.sku, p]));
 
-    const ops: any[] = [];
+    const remainingItems = await prisma.purchaseOrderItem.groupBy({
+      by: ["sku"],
+      where: {
+        sku: { in: skus },
+        purchaseOrderId: { not: id },
+        purchaseOrder: { storeId, status: { not: "CANCELLED" } },
+      },
+      _sum: { quantity: true },
+    });
+    const remainingPurchaseMap = new Map(
+      remainingItems
+        .filter((row): row is { sku: string; _sum: { quantity: number | null } } => !!row.sku)
+        .map((row) => [row.sku, row._sum.quantity || 0])
+    );
+
+    const ops: Prisma.PrismaPromise<unknown>[] = [];
     for (const item of items) {
-      const productId = item.sku ? productMap.get(item.sku) : undefined;
-      if (productId && item.quantity > 0) {
+      const product = item.sku ? productMap.get(item.sku) : undefined;
+      const remainingQty = item.sku ? (remainingPurchaseMap.get(item.sku) || 0) : 0;
+      const willDeleteProduct = !!product && remainingQty <= 0 && product._count.orderItems === 0;
+
+      if (product && item.quantity > 0 && !willDeleteProduct) {
         ops.push(
           prisma.product.update({
-            where: { id: productId },
+            where: { id: product.id },
             data: { totalStock: { decrement: item.quantity } },
           })
         );
@@ -273,6 +303,51 @@ export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
                 operator: "System",
                 note: `采购单删除回滚 ${existing!.poNumber}`,
               },
+            })
+          );
+        }
+      }
+    }
+
+    for (const product of products) {
+      const remainingQty = remainingPurchaseMap.get(product.sku) || 0;
+      let allocatable = Math.max(remainingQty, 0);
+      const allocations = product.variants
+        .flatMap((variant) => variant.channelInventory)
+        .sort((a, b) => b.allocated - a.allocated);
+
+      for (const allocation of allocations) {
+        const nextAllocated = Math.min(allocation.allocated, allocatable);
+        const nextReserved = Math.min(allocation.reserved, nextAllocated);
+        allocatable -= nextAllocated;
+
+        if (
+          nextAllocated !== allocation.allocated ||
+          nextReserved !== allocation.reserved
+        ) {
+          ops.push(
+            prisma.channelInventory.update({
+              where: { id: allocation.id },
+              data: { allocated: nextAllocated, reserved: nextReserved },
+            })
+          );
+        }
+      }
+
+      if (remainingQty <= 0) {
+        if (product._count.orderItems === 0) {
+          ops.push(prisma.product.delete({ where: { id: product.id } }));
+        } else {
+          ops.push(
+            prisma.product.update({
+              where: { id: product.id },
+              data: { totalStock: 0 },
+            })
+          );
+          ops.push(
+            prisma.productVariant.updateMany({
+              where: { productId: product.id },
+              data: { stock: 0 },
             })
           );
         }

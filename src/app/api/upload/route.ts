@@ -3,13 +3,16 @@ import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { getAuthContext, rateLimit, withTryCatch } from "@/lib/api-utils";
 
+const MAX_UPLOAD_MB = 20;
+const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
 export const POST = withTryCatch(async (req: NextRequest) => {
   // Auth check
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
 
-  // Rate limit — 10 uploads per minute
-  const limited = rateLimit(req, { max: 10, window: 60_000, key: "upload" });
+  // Rate limit — allow burst image uploads in purchasing details
+  const limited = rateLimit(req, { max: 120, window: 60_000, key: "upload-image" });
   if (limited) return limited;
 
   const formData = await req.formData();
@@ -24,8 +27,8 @@ export const POST = withTryCatch(async (req: NextRequest) => {
     return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
   }
 
-  if (file.size > 5 * 1024 * 1024) {
-    return NextResponse.json({ error: "File too large (max 5MB)" }, { status: 400 });
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: `File too large (max ${MAX_UPLOAD_MB}MB)` }, { status: 400 });
   }
 
   const bytes = await file.arrayBuffer();
@@ -43,5 +46,5 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const filePath = path.join(uploadDir, filename);
   await writeFile(filePath, buffer);
 
-  return NextResponse.json({ url: `/uploads/${filename}` });
+  return NextResponse.json({ url: `/api/upload/${filename}` });
 });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
+import { buildSkuFromSerial, extractSerialNo, normalizeSkuConfig } from "@/lib/sku-config";
 
 export const GET = withTryCatch(async (_req: NextRequest) => {
   const ctx = await getAuthContext();
@@ -10,21 +11,37 @@ export const GET = withTryCatch(async (_req: NextRequest) => {
   if (denied) return denied;
   const { storeId } = ctx;
 
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { skuPrefix: true, skuStartNo: true } });
-  const prefix = store?.skuPrefix || "RJ";
-  const startStr = store?.skuStartNo || "1001";
-  const fullPrefix = `${prefix}-`;
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { skuPrefix: true, skuStartNo: true, notificationPrefs: true },
+  });
 
-  const latest = await prisma.product.findFirst({
-    where: { storeId, sku: { startsWith: fullPrefix } },
-    orderBy: { sku: "desc" },
+  const notificationPrefs =
+    store?.notificationPrefs && typeof store.notificationPrefs === "object" && !Array.isArray(store.notificationPrefs)
+      ? (store.notificationPrefs as Record<string, unknown>)
+      : {};
+  const skuConfig = normalizeSkuConfig(notificationPrefs.skuConfig, store?.skuPrefix, store?.skuStartNo);
+
+  const products = await prisma.product.findMany({
+    where: { storeId },
     select: { sku: true },
   });
 
-  if (!latest) return NextResponse.json({ sku: `${fullPrefix}${startStr}` });
+  let maxSerial = -1;
+  for (const product of products) {
+    const serial = extractSerialNo(skuConfig, product.sku);
+    if (serial !== null) {
+      maxSerial = Math.max(maxSerial, serial);
+    }
+  }
 
-  const num = parseInt(latest.sku.replace(fullPrefix, ""), 10);
-  const nextSku = isNaN(num) ? `${fullPrefix}${startStr}` : `${fullPrefix}${num + 1}`;
+  const startSerial = parseInt(skuConfig.serialStartNo, 10);
+  const nextSerial = maxSerial >= 0 ? maxSerial + 1 : (Number.isNaN(startSerial) ? 1001 : startSerial);
+  const sku = buildSkuFromSerial(skuConfig, nextSerial);
 
-  return NextResponse.json({ sku: nextSku });
+  return NextResponse.json({
+    sku,
+    nextSerial,
+    skuConfig,
+  });
 });

@@ -151,7 +151,34 @@ export const POST = withTryCatch(async (req: NextRequest) => {
 
   // Batch: collect all SKUs and query existing products at once
   const validItems = (body.items || []).filter((item: any) => item.sku && item.productName);
-  const skus = validItems.map((item: any) => item.sku);
+  const skuSummary = new Map<string, {
+    sku: string;
+    productName: string;
+    totalQty: number;
+    costLocal: number;
+    images: Set<string>;
+  }>();
+  for (const item of validItems) {
+    const sku = item.sku;
+    const qty = Number(item.quantity) || 0;
+    const costLocal = exchangeRate ? (Number(item.unitCost) || 0) / exchangeRate : 0;
+    const urls = (item.images || []).filter((url: string) => typeof url === "string" && url.trim() !== "");
+    const existing = skuSummary.get(sku);
+    if (existing) {
+      existing.totalQty += qty;
+      existing.costLocal = costLocal;
+      urls.forEach((url: string) => existing.images.add(url));
+    } else {
+      skuSummary.set(sku, {
+        sku,
+        productName: item.productName,
+        totalQty: qty,
+        costLocal,
+        images: new Set(urls),
+      });
+    }
+  }
+  const skus = Array.from(skuSummary.keys());
 
   const existingProducts = skus.length > 0
     ? await prisma.product.findMany({
@@ -163,17 +190,16 @@ export const POST = withTryCatch(async (req: NextRequest) => {
 
   // Build all operations and run in a single transaction
   const ops: any[] = [];
-  for (const item of validItems) {
-    const costLocal = exchangeRate ? (item.unitCost || 0) / exchangeRate : 0;
-    const existingId = existingMap.get(item.sku);
+  for (const summary of Array.from(skuSummary.values())) {
+    const existingId = existingMap.get(summary.sku);
 
     if (existingId) {
       ops.push(
         prisma.product.update({
           where: { id: existingId },
           data: {
-            costPrice: costLocal,
-            totalStock: { increment: item.quantity || 0 },
+            costPrice: summary.costLocal,
+            totalStock: { increment: summary.totalQty },
           },
         })
       );
@@ -182,32 +208,35 @@ export const POST = withTryCatch(async (req: NextRequest) => {
         prisma.product.create({
           data: {
             storeId,
-            sku: item.sku,
-            nameZh: item.productName,
-            nameEn: item.productName,
-            costPrice: costLocal,
+            sku: summary.sku,
+            nameZh: summary.productName,
+            nameEn: summary.productName,
+            costPrice: summary.costLocal,
             sellingPrice: 0,
-            totalStock: item.quantity || 0,
+            totalStock: summary.totalQty,
             status: "ACTIVE",
           },
         })
       );
     }
 
-    if (warehouseId && item.quantity > 0) {
-      ops.push(
-        prisma.inventoryAction.create({
-          data: {
-            warehouseId,
-            type: "INBOUND",
-            variantSku: item.sku,
-            quantity: item.quantity,
-            operator: "System",
-            note: `采购入库 ${poNumber}`,
-          },
-        })
-      );
-    }
+  }
+
+  for (const item of validItems) {
+    const qty = Number(item.quantity) || 0;
+    if (!warehouseId || qty <= 0) continue;
+    ops.push(
+      prisma.inventoryAction.create({
+        data: {
+          warehouseId,
+          type: "INBOUND",
+          variantSku: item.sku,
+          quantity: qty,
+          operator: "System",
+          note: `采购入库 ${poNumber}`,
+        },
+      })
+    );
   }
 
   if (ops.length > 0) {
@@ -225,24 +254,25 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const productMap = new Map(allProducts.map((p) => [p.sku, p]));
 
   const imageOps: any[] = [];
-  for (const item of validItems) {
-    const imgs: string[] = item.images || [];
-    if (imgs.length === 0) continue;
-    const prod = productMap.get(item.sku);
+  for (const summary of Array.from(skuSummary.values())) {
+    if (summary.images.size === 0) continue;
+    const prod = productMap.get(summary.sku);
     if (!prod) continue;
     const existingUrls = new Set(prod.images.map((i) => i.url));
-    imgs.forEach((url: string, idx: number) => {
+    let createdCount = 0;
+    Array.from(summary.images).forEach((url: string) => {
       if (!existingUrls.has(url)) {
         imageOps.push(
           prisma.productImage.create({
             data: {
               productId: prod.id,
               url,
-              position: existingUrls.size + idx,
-              isPrimary: existingUrls.size === 0 && idx === 0,
+              position: existingUrls.size + createdCount,
+              isPrimary: existingUrls.size === 0 && createdCount === 0,
             },
           })
         );
+        createdCount += 1;
       }
     });
   }

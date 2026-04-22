@@ -39,7 +39,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const [suppliers, total] = await Promise.all([
     prisma.supplier.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: { supplierNo: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

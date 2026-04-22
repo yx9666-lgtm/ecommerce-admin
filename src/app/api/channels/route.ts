@@ -99,6 +99,8 @@ export const POST = withTryCatch(async (req: NextRequest) => {
 export const PUT = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.edit);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const body = await parseBody(req, updateChannelSchema);
@@ -134,6 +136,8 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
 export const DELETE = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.delete);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const id = req.nextUrl.searchParams.get("id");
@@ -146,10 +150,7 @@ export const DELETE = withTryCatch(async (req: NextRequest) => {
   const ownershipError = assertStoreOwnership(existing?.storeId, storeId);
   if (ownershipError) return ownershipError;
 
-  await prisma.channel.update({
-    where: { id },
-    data: { isActive: false },
-  });
+  await prisma.channel.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 });

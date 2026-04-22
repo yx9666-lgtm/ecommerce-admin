@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Package } from "lucide-react";
+import { normalizeImageUrl } from "@/lib/image-url";
 
 interface ImageGalleryProps {
   images: string[];
@@ -14,12 +15,13 @@ interface ImageGalleryProps {
 export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGalleryProps) {
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState(0);
+  const normalizedImages = images.map((img) => normalizeImageUrl(img));
 
-  const hasImages = images.length > 0;
-  const thumb = images[0];
+  const hasImages = normalizedImages.length > 0;
+  const thumb = normalizedImages[0];
 
-  const prev = () => setCurrent((c) => (c > 0 ? c - 1 : images.length - 1));
-  const next = () => setCurrent((c) => (c < images.length - 1 ? c + 1 : 0));
+  const prev = () => setCurrent((c) => (c > 0 ? c - 1 : normalizedImages.length - 1));
+  const next = () => setCurrent((c) => (c < normalizedImages.length - 1 ? c + 1 : 0));
 
   return (
     <>
@@ -40,9 +42,9 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
               alt={alt}
               className="w-full h-full rounded-lg object-cover"
             />
-            {images.length > 1 && (
+            {normalizedImages.length > 1 && (
               <span className="absolute -top-1 -right-1 bg-gold-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {images.length}
+                {normalizedImages.length}
               </span>
             )}
           </>
@@ -59,7 +61,7 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
 
           {/* Main image */}
           <div className="relative flex items-center justify-center min-h-[400px] max-h-[70vh]">
-            {images.length > 1 && (
+            {normalizedImages.length > 1 && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -71,12 +73,12 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
             )}
 
             <img
-              src={images[current]}
+              src={normalizedImages[current]}
               alt={`${alt} ${current + 1}`}
               className="max-w-full max-h-[70vh] object-contain mx-auto"
             />
 
-            {images.length > 1 && (
+            {normalizedImages.length > 1 && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -89,9 +91,9 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
           </div>
 
           {/* Thumbnail strip */}
-          {images.length > 1 && (
+          {normalizedImages.length > 1 && (
             <div className="flex items-center justify-center gap-2 px-4 pb-4">
-              {images.map((img, idx) => (
+              {normalizedImages.map((img, idx) => (
                 <button
                   key={idx}
                   className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-all ${
@@ -103,7 +105,7 @@ export function ImageGallery({ images, alt = "", thumbnailSize = 40 }: ImageGall
                 </button>
               ))}
               <span className="text-white/50 text-xs ml-2">
-                {current + 1} / {images.length}
+                {current + 1} / {normalizedImages.length}
               </span>
             </div>
           )}
