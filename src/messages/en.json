@@ -204,7 +204,12 @@
     "overAllocatedWarning": "Warning: Total allocation exceeds warehouse stock!",
     "confirmAllocate": "Confirm Allocation",
     "transferSuccess": "Stock allocation saved",
-    "showChannels": "Show channels"
+    "showChannels": "Show channels",
+    "statusAll": "All Statuses",
+    "statusNormal": "Normal",
+    "statusLow": "Low",
+    "statusCritical": "Critical",
+    "statusOut": "Out of Stock"
   },
   "customers": {
     "title": "Customers",
@@ -354,6 +359,12 @@
     "exportOrders": "Export Orders",
     "exportOrdersDesc": "Export all order data",
     "exportCSV": "Export CSV",
+    "stockStatusThresholds": "Stock Status Thresholds",
+    "stockStatusThresholdsDesc": "Configure separate thresholds for Low, Critical, and Out of Stock",
+    "stockStatusThresholdRule": "Rule: Out of Stock ≤ Critical ≤ Low",
+    "criticalStockThreshold": "Critical Threshold",
+    "outStockThreshold": "Out of Stock Threshold",
+    "stockStatusThresholdInvalid": "Invalid threshold settings: Out of Stock ≤ Critical ≤ Low is required",
     "lowStockThreshold": "Low Stock Threshold",
     "lowStockThresholdDesc": "Alert when product stock falls below this value",
     "addUser": "Add User",

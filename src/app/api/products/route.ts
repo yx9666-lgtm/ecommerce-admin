@@ -1,7 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
+import { existsSync } from "fs";
+import path from "path";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
+
+function imageUrlHasFile(url: string) {
+  if (!url) return false;
+  let pathname = url;
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    // keep original relative path
+  }
+
+  let filename = "";
+  if (pathname.startsWith("/api/upload/")) {
+    filename = pathname.slice("/api/upload/".length);
+  } else if (pathname.startsWith("/uploads/")) {
+    filename = pathname.slice("/uploads/".length);
+  } else {
+    return true;
+  }
+  if (!filename) return false;
+  const safeName = path.basename(filename);
+  return existsSync(path.join(process.cwd(), "public", "uploads", safeName));
+}
 
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
@@ -77,22 +101,26 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       orderBy: { id: "desc" },
     });
     for (const item of poItems) {
-      if (item.sku && item.images.length > 0 && !poImageMap[item.sku]) {
-        poImageMap[item.sku] = item.images;
+      const validImages = (item.images || []).filter(imageUrlHasFile);
+      if (item.sku && validImages.length > 0 && !poImageMap[item.sku]) {
+        poImageMap[item.sku] = validImages;
       }
     }
   }
 
   // Compute realStock and merge images
   const items = products.map((p) => {
-    const realStock = p.variants.reduce(
+    const inventoryRealStock = p.variants.reduce(
       (sum, v) => sum + v.inventory.reduce((s, inv) => s + inv.quantity, 0),
       0
     );
+    const hasInventoryRecords = p.variants.some((v) => v.inventory.length > 0);
+    const realStock = hasInventoryRecords ? inventoryRealStock : p.totalStock;
     const { variants, ...rest } = p;
+    const validProductImages = p.images.map((img) => img.url).filter(imageUrlHasFile);
     // Use ProductImage if available, otherwise fallback to PO images
-    const allImages = p.images.length > 0
-      ? p.images.map((img) => img.url)
+    const allImages = validProductImages.length > 0
+      ? validProductImages
       : (poImageMap[p.sku] || []);
     return { ...rest, realStock, allImages, imageCount: allImages.length };
   });

@@ -81,6 +81,11 @@ type StoreInfo = {
   supplierStartNo: string;
   poPrefix: string;
   lowStockThreshold: number;
+  stockStatusThresholds?: {
+    low: number;
+    critical: number;
+    out: number;
+  };
   skuConfig?: SkuConfig;
 };
 
@@ -190,8 +195,10 @@ export default function SettingsPage() {
   // ── Export state ──
   const [exporting, setExporting] = useState<string | null>(null);
 
-  // ── Low stock threshold ──
+  // ── Stock status thresholds ──
   const [lowStockThreshold, setLowStockThreshold] = useState(10);
+  const [criticalStockThreshold, setCriticalStockThreshold] = useState(3);
+  const [outStockThreshold, setOutStockThreshold] = useState(0);
 
   // ── Add/Edit-user dialog state ──
   const [showUserDialog, setShowUserDialog] = useState(false);
@@ -258,7 +265,14 @@ export default function SettingsPage() {
         setSupplierPrefix(data.supplierPrefix || "SUP");
         setSupplierStartNo(data.supplierStartNo || "001");
         setPoPrefix(data.poPrefix || "RJ");
-        setLowStockThreshold(data.lowStockThreshold ?? 10);
+        const stockThresholds = data.stockStatusThresholds ?? {
+          low: data.lowStockThreshold ?? 10,
+          critical: Math.max(0, Math.floor((data.lowStockThreshold ?? 10) * 0.3)),
+          out: 0,
+        };
+        setLowStockThreshold(stockThresholds.low);
+        setCriticalStockThreshold(stockThresholds.critical);
+        setOutStockThreshold(stockThresholds.out);
       }
     } catch {
       // silent
@@ -402,6 +416,11 @@ export default function SettingsPage() {
         setStoreSaving(false);
         return;
       }
+      if (outStockThreshold > criticalStockThreshold || criticalStockThreshold > lowStockThreshold) {
+        setStoreMsg({ type: "error", text: t("stockStatusThresholdInvalid") });
+        setStoreSaving(false);
+        return;
+      }
 
       const skuConfig = {
         partCount,
@@ -427,11 +446,24 @@ export default function SettingsPage() {
           supplierStartNo,
           poPrefix,
           lowStockThreshold,
+          stockStatusThresholds: {
+            low: lowStockThreshold,
+            critical: criticalStockThreshold,
+            out: outStockThreshold,
+          },
         }),
       });
       if (res.ok) {
         const data: StoreInfo = await res.json();
         setStoreInfo(data);
+        const stockThresholds = data.stockStatusThresholds ?? {
+          low: data.lowStockThreshold ?? 10,
+          critical: Math.max(0, Math.floor((data.lowStockThreshold ?? 10) * 0.3)),
+          out: 0,
+        };
+        setLowStockThreshold(stockThresholds.low);
+        setCriticalStockThreshold(stockThresholds.critical);
+        setOutStockThreshold(stockThresholds.out);
         setStoreMsg({ type: "success", text: t("storeSaved") });
       } else {
         const err = await res.json().catch(() => ({}));
@@ -956,18 +988,41 @@ export default function SettingsPage() {
                   </div>
                   <Separator className="my-4" />
                   <div>
-                    <h3 className="text-sm font-semibold mb-1">{t("lowStockThreshold")}</h3>
-                    <p className="text-xs text-muted-foreground mb-3">{t("lowStockThresholdDesc")}</p>
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 text-gold-500" />
-                      <Input
-                        type="number"
-                        min={0}
-                        value={lowStockThreshold}
-                        onChange={(e) => setLowStockThreshold(parseInt(e.target.value) || 0)}
-                        className="w-32"
-                      />
+                    <h3 className="text-sm font-semibold mb-1">{t("stockStatusThresholds")}</h3>
+                    <p className="text-xs text-muted-foreground mb-3">{t("stockStatusThresholdsDesc")}</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t("lowStockThreshold")}</Label>
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-gold-500" />
+                          <Input
+                            type="number"
+                            min={0}
+                            value={lowStockThreshold}
+                            onChange={(e) => setLowStockThreshold(parseInt(e.target.value) || 0)}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t("criticalStockThreshold")}</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={criticalStockThreshold}
+                          onChange={(e) => setCriticalStockThreshold(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">{t("outStockThreshold")}</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={outStockThreshold}
+                          onChange={(e) => setOutStockThreshold(parseInt(e.target.value) || 0)}
+                        />
+                      </div>
                     </div>
+                    <p className="mt-2 text-xs text-muted-foreground">{t("stockStatusThresholdRule")}</p>
                   </div>
                   {storeMsg && (
                     <p className={`text-sm ${storeMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>

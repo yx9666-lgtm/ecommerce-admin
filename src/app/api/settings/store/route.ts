@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { getAuthContext, parseBody, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 import { buildSkuFromSerial, extractSerialNo, formatSerialNo, normalizeSkuConfig, type SkuConfig } from "@/lib/sku-config";
+
+type StockStatusThresholds = {
+  low: number;
+  critical: number;
+  out: number;
+};
 
 async function resolveEffectiveSkuConfig(storeId: string, baseConfig: SkuConfig) {
   const products = await prisma.product.findMany({
@@ -31,6 +38,30 @@ async function resolveEffectiveSkuConfig(storeId: string, baseConfig: SkuConfig)
       serialStartNo: formatSerialNo(nextSerial, serialWidth),
     },
   };
+}
+
+function normalizeStockStatusThresholds(input: unknown, fallbackLow: number): StockStatusThresholds {
+  const safeFallbackLow = Math.max(0, Number.isFinite(fallbackLow) ? Math.floor(fallbackLow) : 10);
+  let low = safeFallbackLow;
+  let critical = safeFallbackLow > 0 ? Math.max(0, Math.floor(safeFallbackLow * 0.3)) : 0;
+  let out = 0;
+
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const raw = input as Record<string, unknown>;
+    const toInt = (value: unknown, fallback: number) => {
+      if (typeof value === "number" && Number.isFinite(value)) return Math.floor(value);
+      if (typeof value === "string" && /^\d+$/.test(value)) return parseInt(value, 10);
+      return fallback;
+    };
+    low = Math.max(0, toInt(raw.low, low));
+    critical = Math.max(0, toInt(raw.critical, critical));
+    out = Math.max(0, toInt(raw.out, out));
+  }
+
+  if (critical > low) critical = low;
+  if (out > critical) out = critical;
+
+  return { low, critical, out };
 }
 
 // ─── GET: return current store info ─────────────────────────────────────────
@@ -68,11 +99,17 @@ export const GET = withTryCatch(async () => {
     store.notificationPrefs && typeof store.notificationPrefs === "object" && !Array.isArray(store.notificationPrefs)
       ? (store.notificationPrefs as Record<string, unknown>)
       : {};
+  const stockStatusThresholds = normalizeStockStatusThresholds(
+    notificationPrefs.stockStatusThresholds,
+    store.lowStockThreshold
+  );
   const baseSkuConfig = normalizeSkuConfig(notificationPrefs.skuConfig, store.skuPrefix, store.skuStartNo);
   const effective = await resolveEffectiveSkuConfig(storeId, baseSkuConfig);
 
   return NextResponse.json({
     ...store,
+    lowStockThreshold: stockStatusThresholds.low,
+    stockStatusThresholds,
     skuConfig: effective.skuConfig,
     nextSku: effective.nextSku,
     nextSerial: effective.nextSerial,
@@ -135,6 +172,29 @@ const updateStoreSchema = z.object({
   supplierStartNo: z.string().min(1).max(10).optional(),
   poPrefix: z.string().min(1).max(10).optional(),
   lowStockThreshold: z.number().int().min(0).optional(),
+  stockStatusThresholds: z
+    .object({
+      low: z.number().int().min(0),
+      critical: z.number().int().min(0),
+      out: z.number().int().min(0),
+    })
+    .superRefine((value, ctx) => {
+      if (value.critical > value.low) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["critical"],
+          message: "critical must be less than or equal to low",
+        });
+      }
+      if (value.out > value.critical) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["out"],
+          message: "out must be less than or equal to critical",
+        });
+      }
+    })
+    .optional(),
   skuConfig: skuConfigSchema.optional(),
 });
 
@@ -148,11 +208,11 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
   const body = await parseBody(req, updateStoreSchema);
   if (body instanceof NextResponse) return body;
 
-  const { skuConfig, ...rest } = body;
+  const { skuConfig, stockStatusThresholds, ...rest } = body;
 
   const existingStore = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { notificationPrefs: true },
+    select: { notificationPrefs: true, lowStockThreshold: true },
   });
   const existingPrefs =
     existingStore?.notificationPrefs &&
@@ -160,23 +220,49 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
     !Array.isArray(existingStore.notificationPrefs)
       ? (existingStore.notificationPrefs as Record<string, unknown>)
       : {};
+  const existingThresholds = normalizeStockStatusThresholds(
+    existingPrefs.stockStatusThresholds,
+    existingStore?.lowStockThreshold ?? 10
+  );
+  const mergedThresholds =
+    stockStatusThresholds
+      ? normalizeStockStatusThresholds(stockStatusThresholds, stockStatusThresholds.low)
+      : body.lowStockThreshold !== undefined
+        ? normalizeStockStatusThresholds(
+            { ...existingThresholds, low: body.lowStockThreshold },
+            body.lowStockThreshold
+          )
+        : null;
+  const nextPrefs: Record<string, unknown> = { ...existingPrefs };
+  if (skuConfig) {
+    nextPrefs.skuConfig = {
+      partCount: skuConfig.partCount,
+      serialPart: skuConfig.serialPart,
+      separator: skuConfig.separator,
+      serialStartNo: skuConfig.serialStartNo,
+      parts: skuConfig.parts.map((part) => part.trim().toUpperCase()),
+    };
+  }
+  if (mergedThresholds) {
+    nextPrefs.stockStatusThresholds = mergedThresholds;
+  }
 
   const store = await prisma.store.update({
     where: { id: storeId },
     data: {
       ...rest,
+      ...(skuConfig || mergedThresholds
+        ? {
+            notificationPrefs: nextPrefs as Prisma.InputJsonValue,
+          }
+        : {}),
+      ...(mergedThresholds
+        ? {
+            lowStockThreshold: mergedThresholds.low,
+          }
+        : {}),
       ...(skuConfig
         ? {
-            notificationPrefs: {
-              ...existingPrefs,
-              skuConfig: {
-                partCount: skuConfig.partCount,
-                serialPart: skuConfig.serialPart,
-                separator: skuConfig.separator,
-                serialStartNo: skuConfig.serialStartNo,
-                parts: skuConfig.parts.map((part) => part.trim().toUpperCase()),
-              },
-            },
             skuStartNo: skuConfig.serialStartNo,
           }
         : {}),
@@ -201,11 +287,17 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
     store.notificationPrefs && typeof store.notificationPrefs === "object" && !Array.isArray(store.notificationPrefs)
       ? (store.notificationPrefs as Record<string, unknown>)
       : {};
+  const normalizedThresholds = normalizeStockStatusThresholds(
+    notificationPrefs.stockStatusThresholds,
+    store.lowStockThreshold
+  );
   const normalizedSkuConfig = normalizeSkuConfig(notificationPrefs.skuConfig, store.skuPrefix, store.skuStartNo);
   const effective = await resolveEffectiveSkuConfig(storeId, normalizedSkuConfig);
 
   return NextResponse.json({
     ...store,
+    lowStockThreshold: normalizedThresholds.low,
+    stockStatusThresholds: normalizedThresholds,
     skuConfig: effective.skuConfig,
     nextSku: effective.nextSku,
     nextSerial: effective.nextSerial,

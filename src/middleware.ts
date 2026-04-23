@@ -12,6 +12,9 @@ export default withAuth({
       if (pathname.startsWith("/api/platforms/callback")) {
         return true;
       }
+      if (pathname.startsWith("/api/upload")) {
+        return true;
+      }
       if (pathname === "/api/health") {
         return true;
       }

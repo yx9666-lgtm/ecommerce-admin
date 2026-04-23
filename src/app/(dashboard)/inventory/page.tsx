@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ImageGallery } from "@/components/ui/image-gallery";
 import {
   Table,
@@ -128,6 +129,7 @@ export default function InventoryPage() {
   const tch = useTranslations("channels");
 
   const [search, setSearch] = useState("");
+  const [stockStatusFilter, setStockStatusFilter] = useState("all");
   const [activeTab, setActiveTab] = useState("stock");
   const [loading, setLoading] = useState(true);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
@@ -351,6 +353,9 @@ export default function InventoryPage() {
   const transferUnallocated = (transferProduct?.stock || 0) - transferTotalAllocated;
 
   const totalStock = stockItems.reduce((s, i) => s + i.stock, 0);
+  const filteredStockItems = stockStatusFilter === "all"
+    ? stockItems
+    : stockItems.filter((item) => item.status === stockStatusFilter);
   const stockTotalPages = Math.ceil(stockTotal / stockPageSize);
   const channelTotalPages = Math.ceil(channelTotal / channelPageSize);
 
@@ -458,21 +463,38 @@ export default function InventoryPage() {
           <Card>
             <CardContent className="p-0">
               <div className="p-4 border-b">
-                <div className="relative max-w-sm">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="搜索 SKU、商品名称..."
-                    value={search}
-                    onChange={(e) => { setSearch(e.target.value); setStockPage(1); }}
-                    className="pl-9"
-                  />
+                <div className="flex gap-3">
+                  <div className="relative max-w-sm flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="搜索 SKU、商品名称..."
+                      value={search}
+                      onChange={(e) => { setSearch(e.target.value); setStockPage(1); }}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select
+                    value={stockStatusFilter}
+                    onValueChange={(value) => { setStockStatusFilter(value); setStockPage(1); }}
+                  >
+                    <SelectTrigger className="w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t("statusAll")}</SelectItem>
+                      <SelectItem value="normal">{t("statusNormal")}</SelectItem>
+                      <SelectItem value="low">{t("statusLow")}</SelectItem>
+                      <SelectItem value="critical">{t("statusCritical")}</SelectItem>
+                      <SelectItem value="out">{t("statusOut")}</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               {loading ? (
                 <div className="flex justify-center py-16">
                   <Loader2 className="h-6 w-6 animate-spin text-gold-700" />
                 </div>
-              ) : stockItems.length === 0 ? (
+              ) : filteredStockItems.length === 0 ? (
                 <div className="text-center py-16">
                   <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                   <p className="text-muted-foreground">{tc("noData")}</p>
@@ -498,7 +520,7 @@ export default function InventoryPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {stockItems.map((item) => (
+                      {filteredStockItems.map((item) => (
                         <TableRow key={item.sku}>
                           <TableCell className="font-mono text-sm">
                             {item.sku}

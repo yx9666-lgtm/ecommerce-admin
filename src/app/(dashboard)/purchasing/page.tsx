@@ -83,6 +83,8 @@ interface PO {
   poNumber: string;
   status: string;
   supplier: Supplier & { supplierNo?: string };
+  warehouse?: { id: string; name: string } | null;
+  _count?: { items: number };
   supplierInvoiceNo: string | null;
   totalAmount: number;
   totalAmountLocal: number;
@@ -353,9 +355,9 @@ export default function PurchasingPage() {
   }, [findSkuByName, editingPoId, getAutoSku]);
 
   const resolveSkuForItem = useCallback((item: POItem, index: number, itemsList: POItem[]) => {
+    if (editingPoId && item.sku) return item.sku;
     const matchedSku = findSkuByName(item.productName);
     if (matchedSku) return matchedSku;
-    if (editingPoId && item.sku) return item.sku;
     return getDraftSkuForIndex(itemsList, index);
   }, [findSkuByName, editingPoId, getDraftSkuForIndex]);
 
@@ -561,6 +563,7 @@ export default function PurchasingPage() {
                   <TableHead>采购日期</TableHead>
                   <TableHead>供应商编码</TableHead>
                   <TableHead>供应商单据号</TableHead>
+                  <TableHead>仓库</TableHead>
                   <TableHead className="text-center">{t("items")}</TableHead>
                   <TableHead>采购金额</TableHead>
                   <TableHead>本地金额 (MYR)</TableHead>
@@ -573,7 +576,7 @@ export default function PurchasingPage() {
                       <TableCell className="text-sm font-mono">
                         {po.poNumber}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums">
                         {formatDate(po.expectedDate || po.createdAt)}
                       </TableCell>
                       <TableCell className="text-sm font-mono">
@@ -582,17 +585,20 @@ export default function PurchasingPage() {
                       <TableCell className="text-sm">
                         {po.supplierInvoiceNo || "-"}
                       </TableCell>
-                      <TableCell className="text-sm">
-                        {po.items?.length || 0}
+                      <TableCell className="text-sm font-mono">
+                        {po.warehouse?.name || "-"}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm text-center font-mono tabular-nums">
+                        {po._count?.items ?? po.items?.length ?? 0}
+                      </TableCell>
+                      <TableCell className="text-sm font-mono tabular-nums">
                         {getCurrencySymbol(po.purchaseCurrency)}{" "}
-                        {po.totalAmount.toLocaleString("en", { minimumFractionDigits: 2 })}
+                        {po.totalAmount.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums">
                         {formatCurrency(po.totalAmountLocal || po.totalAmount)}
                         {(po.refundAmount || 0) > 0 && (
-                          <div className="text-xs text-red-500 dark:text-red-400 mt-0.5">退货 -RM {(po.refundAmountLocal || 0).toLocaleString("en", { minimumFractionDigits: 2 })}</div>
+                          <div className="text-xs text-red-500 dark:text-red-400 mt-0.5 font-mono tabular-nums">退货 -RM {(po.refundAmountLocal || 0).toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         )}
                       </TableCell>
                       <TableCell>
@@ -1132,8 +1138,8 @@ export default function PurchasingPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="whitespace-nowrap">商品名称</TableHead>
                           <TableHead className="whitespace-nowrap">SKU</TableHead>
+                          <TableHead className="whitespace-nowrap">商品名称</TableHead>
                           <TableHead className="whitespace-nowrap">图片</TableHead>
                           <TableHead className="whitespace-nowrap">分类</TableHead>
                           <TableHead className="whitespace-nowrap">规格</TableHead>
@@ -1154,8 +1160,8 @@ export default function PurchasingPage() {
                           const refundItem = dq * (item.unitCost || 0);
                           return (
                             <TableRow key={item.id} className={dq > 0 ? "bg-red-50/50" : ""}>
-                              <TableCell className="text-sm">{item.productName}</TableCell>
                               <TableCell className="font-mono text-sm whitespace-nowrap">{item.sku || "-"}</TableCell>
+                              <TableCell className="text-sm">{item.productName}</TableCell>
                               <TableCell>
                                 <ImageGallery
                                   images={Array.isArray(item.images) ? item.images : []}

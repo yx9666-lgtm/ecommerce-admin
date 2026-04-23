@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -25,13 +24,6 @@ interface Product {
   imageCount?: number;
 }
 
-const statusMap: Record<string, { label: string; variant: "success" | "default" | "secondary" | "warning" }> = {
-  ACTIVE: { label: "上架", variant: "success" },
-  DRAFT: { label: "草稿", variant: "secondary" },
-  INACTIVE: { label: "下架", variant: "warning" },
-  ARCHIVED: { label: "归档", variant: "default" },
-};
-
 export default function ProductsPage() {
   const t = useTranslations("products");
   const tc = useTranslations("common");
@@ -39,6 +31,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 20;
@@ -62,6 +55,24 @@ export default function ProductsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useAutoRefresh(loadData);
+
+  const handleStatusChange = async (productId: string, status: string) => {
+    setUpdatingStatusId(productId);
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "状态更新失败");
+      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, status } : p)));
+    } catch (e) {
+      console.error(e);
+      alert(e instanceof Error ? e.message : "状态更新失败");
+    }
+    setUpdatingStatusId(null);
+  };
 
   const filtered = products;
   const totalPages = Math.ceil(total / pageSize);
@@ -111,20 +122,22 @@ export default function ProductsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>{t("sku")}</TableHead>
                   <TableHead>{t("productName")}</TableHead>
                   <TableHead>商品图片</TableHead>
-                  <TableHead>{t("sku")}</TableHead>
                   <TableHead>{t("costPrice")}</TableHead>
-                  <TableHead>采购数量</TableHead>
-                  <TableHead>真实库存</TableHead>
-                  <TableHead>{t("status")}</TableHead>
+                  <TableHead className="text-center">采购数量</TableHead>
+                  <TableHead className="text-center">真实库存</TableHead>
+                  <TableHead className="text-center">{t("status")}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+                <TableBody>
                 {filtered.map((product) => {
-                  const statusInfo = statusMap[product.status] || statusMap.DRAFT;
                   return (
                     <TableRow key={product.id}>
+                      <TableCell>
+                        <span className="font-mono text-sm">{product.sku}</span>
+                      </TableCell>
                       <TableCell>
                         <span className="text-sm">{product.nameZh || product.nameEn}</span>
                       </TableCell>
@@ -134,17 +147,32 @@ export default function ProductsPage() {
                           alt={product.nameZh}
                         />
                       </TableCell>
-                      <TableCell>
-                        <span className="font-mono text-sm">{product.sku}</span>
-                      </TableCell>
-                      <TableCell className="text-sm">{formatCurrency(product.costPrice)}</TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums">{formatCurrency(product.costPrice)}</TableCell>
+                      <TableCell className="text-sm font-mono tabular-nums text-center">
                         {product.totalStock}
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-sm font-mono tabular-nums text-center">
                         {product.realStock ?? 0}
                       </TableCell>
-                      <TableCell><Badge variant={statusInfo.variant}>{statusInfo.label}</Badge></TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex justify-center">
+                          <Select
+                            value={product.status}
+                            onValueChange={(value) => handleStatusChange(product.id, value)}
+                            disabled={updatingStatusId === product.id}
+                          >
+                            <SelectTrigger className="h-8 w-[94px] text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ACTIVE">{t("statusActive")}</SelectItem>
+                              <SelectItem value="DRAFT">{t("statusDraft")}</SelectItem>
+                              <SelectItem value="INACTIVE">{t("statusInactive")}</SelectItem>
+                              <SelectItem value="ARCHIVED">{t("statusArchived")}</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}

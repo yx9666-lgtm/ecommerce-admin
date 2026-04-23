@@ -3,12 +3,48 @@ import prisma from "@/lib/db";
 import { getAuthContext, withTryCatch } from "@/lib/api-utils";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
+function normalizeStockStatusThresholds(input: unknown, fallbackLow: number) {
+  const safeFallbackLow = Math.max(0, Number.isFinite(fallbackLow) ? Math.floor(fallbackLow) : 10);
+  let low = safeFallbackLow;
+  let critical = safeFallbackLow > 0 ? Math.max(0, Math.floor(safeFallbackLow * 0.3)) : 0;
+  let out = 0;
+
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const raw = input as Record<string, unknown>;
+    const toInt = (value: unknown, fallback: number) => {
+      if (typeof value === "number" && Number.isFinite(value)) return Math.floor(value);
+      if (typeof value === "string" && /^\d+$/.test(value)) return parseInt(value, 10);
+      return fallback;
+    };
+    low = Math.max(0, toInt(raw.low, low));
+    critical = Math.max(0, toInt(raw.critical, critical));
+    out = Math.max(0, toInt(raw.out, out));
+  }
+
+  if (critical > low) critical = low;
+  if (out > critical) out = critical;
+
+  return { low, critical, out };
+}
+
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
   const denied = requirePermission(ctx, PERMISSIONS.inventory.view);
   if (denied) return denied;
   const { storeId } = ctx;
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { lowStockThreshold: true, notificationPrefs: true },
+  });
+  const notificationPrefs =
+    store?.notificationPrefs && typeof store.notificationPrefs === "object" && !Array.isArray(store.notificationPrefs)
+      ? (store.notificationPrefs as Record<string, unknown>)
+      : {};
+  const stockThresholds = normalizeStockStatusThresholds(
+    notificationPrefs.stockStatusThresholds,
+    store?.lowStockThreshold ?? 10
+  );
 
   const { searchParams } = new URL(req.url);
   const page = parseInt(searchParams.get("page") || "1");
@@ -55,9 +91,9 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       take: 50,
     }),
     prisma.warehouse.findMany({ where: { storeId } }),
-    // Count products with low stock (totalStock < 50)
+    // Count products with low stock using store setting threshold
     prisma.product.count({
-      where: { storeId, totalStock: { lt: 50 } },
+      where: { storeId, totalStock: { lt: stockThresholds.low } },
     }),
   ]);
 
@@ -122,7 +158,6 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     if (item.sku) salesBySku[item.sku] = (salesBySku[item.sku] || 0) + item.quantity;
   });
 
-  const safetyStock = 50;
   const stockItems = products.map((p) => {
     const purchaseQty = purchaseMap[p.sku] || 0;
     const channelAllocated = p.variants.reduce(
@@ -135,9 +170,9 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     const realStock = purchaseQty - channelSales;
 
     let status = "normal";
-    if (realStock <= 0) status = "out";
-    else if (realStock < safetyStock * 0.3) status = "critical";
-    else if (realStock < safetyStock) status = "low";
+    if (realStock <= stockThresholds.out) status = "out";
+    else if (realStock <= stockThresholds.critical) status = "critical";
+    else if (realStock < stockThresholds.low) status = "low";
 
     return {
       id: p.id,
@@ -152,7 +187,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       channelSales,
       channelStock,
       realStock,
-      safetyStock,
+      safetyStock: stockThresholds.low,
       status,
       warehouse: warehouses[0]?.name || "-",
     };

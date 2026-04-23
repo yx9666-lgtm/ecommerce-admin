@@ -204,7 +204,12 @@
     "overAllocatedWarning": "警告：分配总数超过了仓库库存！",
     "confirmAllocate": "确认分配",
     "transferSuccess": "库存分配已保存",
-    "showChannels": "显示渠道"
+    "showChannels": "显示渠道",
+    "statusAll": "全部状态",
+    "statusNormal": "正常",
+    "statusLow": "偏低",
+    "statusCritical": "紧急",
+    "statusOut": "缺货"
   },
   "customers": {
     "title": "客户管理",
@@ -354,6 +359,12 @@
     "exportOrders": "导出订单",
     "exportOrdersDesc": "导出所有订单数据",
     "exportCSV": "导出 CSV",
+    "stockStatusThresholds": "库存状态阈值",
+    "stockStatusThresholdsDesc": "可分别设置偏低、紧急、缺货三档阈值",
+    "stockStatusThresholdRule": "规则：缺货 ≤ 紧急 ≤ 偏低",
+    "criticalStockThreshold": "紧急阈值",
+    "outStockThreshold": "缺货阈值",
+    "stockStatusThresholdInvalid": "阈值设置无效：需满足 缺货 ≤ 紧急 ≤ 偏低",
     "lowStockThreshold": "低库存预警值",
     "lowStockThresholdDesc": "当商品库存低于此值时触发预警",
     "addUser": "添加用户",
