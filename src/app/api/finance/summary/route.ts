@@ -37,12 +37,23 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 
   const totalRevenue = orderRevenue + totalManualIncome;
 
-  // Get total expenses
-  const expenseAgg = await prisma.expense.aggregate({
-    where: { storeId },
-    _sum: { amount: true },
-  });
-  const totalExpenses = expenseAgg._sum.amount || 0;
+  // Get manual expenses + purchase order expenses
+  const [expenseAgg, purchaseExpenseAgg] = await Promise.all([
+    prisma.expense.aggregate({
+      where: { storeId },
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    prisma.purchaseOrder.aggregate({
+      where: { storeId, status: { not: "CANCELLED" } },
+      _sum: { totalAmountLocal: true },
+      _count: { _all: true },
+    }),
+  ]);
+  const totalManualExpenses = expenseAgg._sum.amount || 0;
+  const totalPurchaseExpenses = purchaseExpenseAgg._sum.totalAmountLocal || 0;
+  const totalExpenses = totalManualExpenses + totalPurchaseExpenses;
+  const purchaseExpenseCount = purchaseExpenseAgg._count._all || 0;
 
   // Channel-level revenue breakdown
   const channelOrders = await prisma.order.groupBy({
@@ -99,6 +110,14 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     where: { storeId, date: { gte: sixMonthsAgo } },
     select: { amount: true, date: true },
   });
+  const monthlyPurchaseExpenses = await prisma.purchaseOrder.findMany({
+    where: {
+      storeId,
+      status: { not: "CANCELLED" },
+      createdAt: { gte: sixMonthsAgo },
+    },
+    select: { totalAmountLocal: true, createdAt: true },
+  });
 
   let monthlyIncomes: { amount: number; date: Date }[] = [];
   try {
@@ -139,6 +158,30 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     if (bucket) bucket.expenses += e.amount;
   }
 
+  for (const po of monthlyPurchaseExpenses) {
+    const d = new Date(po.createdAt);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = monthlyMap.get(key);
+    if (bucket) bucket.expenses += po.totalAmountLocal || 0;
+  }
+
+  const recentPurchases = await prisma.purchaseOrder.findMany({
+    where: { storeId, status: { not: "CANCELLED" } },
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    select: {
+      id: true,
+      poNumber: true,
+      totalAmountLocal: true,
+      notes: true,
+      createdAt: true,
+      expectedDate: true,
+      supplier: {
+        select: { name: true, supplierNo: true },
+      },
+    },
+  });
+
   const monthNames = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
@@ -160,9 +203,13 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     totalRevenue,
     totalManualIncome,
     totalExpenses,
+    totalManualExpenses,
+    totalPurchaseExpenses,
+    purchaseExpenseCount,
     totalCommission,
     netProfit: totalRevenue - totalCommission - totalExpenses,
     channelRevenue,
     monthlyFinance,
+    recentPurchases,
   });
 });

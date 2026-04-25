@@ -62,7 +62,6 @@ export const POST = withTryCatch(async (req: NextRequest) => {
     icon,
     color,
     shopName,
-    shopUsername,
     shopUrl,
     notes,
   } = body;
@@ -87,7 +86,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
       icon: icon || name.charAt(0).toUpperCase(),
       color: color || "#6b7280",
       shopName,
-      shopUsername,
+      shopUsername: code.toUpperCase(),
       shopUrl,
       notes,
     },
@@ -105,14 +104,14 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
 
   const body = await parseBody(req, updateChannelSchema);
   if (body instanceof NextResponse) return body;
-  const { id, name, icon, color, shopName, shopUsername, shopUrl, notes, isActive } = body;
+  const { id, name, icon, color, shopName, shopUrl, notes, isActive } = body;
 
   if (!id) {
     return apiError("id is required", 400);
   }
 
   // IDOR check
-  const existing = await prisma.channel.findUnique({ where: { id }, select: { storeId: true } });
+  const existing = await prisma.channel.findUnique({ where: { id }, select: { storeId: true, code: true } });
   const ownershipError = assertStoreOwnership(existing?.storeId, storeId);
   if (ownershipError) return ownershipError;
 
@@ -123,7 +122,7 @@ export const PUT = withTryCatch(async (req: NextRequest) => {
       ...(icon !== undefined && { icon }),
       ...(color !== undefined && { color }),
       ...(shopName !== undefined && { shopName }),
-      ...(shopUsername !== undefined && { shopUsername }),
+      ...(existing?.code ? { shopUsername: existing.code } : {}),
       ...(shopUrl !== undefined && { shopUrl }),
       ...(notes !== undefined && { notes }),
       ...(isActive !== undefined && { isActive }),

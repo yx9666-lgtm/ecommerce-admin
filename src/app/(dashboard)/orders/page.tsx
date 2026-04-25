@@ -31,7 +31,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ImageGallery } from "@/components/ui/image-gallery";
 import {
   Search,
@@ -40,7 +39,6 @@ import {
   Eye,
   Edit,
   Package,
-  MapPin,
   CreditCard,
   MessageSquare,
   RotateCcw,
@@ -59,6 +57,7 @@ interface Channel {
   color: string | null;
   icon: string | null;
   shopUsername: string | null;
+  isActive: boolean;
 }
 
 interface OrderItem {
@@ -257,7 +256,11 @@ export default function OrdersPage() {
     }
   }, []);
 
-  const fetchProducts = useCallback(async (searchTerm?: string) => {
+  const fetchProducts = useCallback(async (searchTerm?: string, channelId?: string) => {
+    if (!channelId) {
+      setProducts([]);
+      return;
+    }
     try {
       const params = new URLSearchParams({
         pageSize: "20",
@@ -265,6 +268,7 @@ export default function OrdersPage() {
         fields: "minimal",
       });
       if (searchTerm) params.set("search", searchTerm);
+      if (channelId) params.set("channelId", channelId);
       const res = await fetch(`/api/products?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -289,9 +293,9 @@ export default function OrdersPage() {
 
   useEffect(() => {
     if (showCreateDialog) {
-      fetchProducts();
+      fetchProducts(undefined, newChannelId || undefined);
     }
-  }, [showCreateDialog, fetchProducts]);
+  }, [showCreateDialog, fetchProducts, newChannelId]);
 
   useEffect(() => {
     fetchOrders();
@@ -307,6 +311,34 @@ export default function OrdersPage() {
   );
 
   const totalPages = Math.ceil(total / pageSize);
+  const activeChannels = channels.filter((ch) => ch.isActive);
+  const editSelectableChannels = editChannelId
+    ? channels.filter((ch) => ch.isActive || ch.id === editChannelId)
+    : activeChannels;
+
+  const resetNewItemProducts = useCallback(() => {
+    setNewItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        productId: "",
+        sku: "",
+        name: "",
+        unitPrice: "",
+      }))
+    );
+  }, []);
+
+  const resetEditItemProducts = useCallback(() => {
+    setEditItems((prev) =>
+      prev.map((it) => ({
+        ...it,
+        productId: "",
+        sku: "",
+        name: "",
+        unitPrice: "",
+      }))
+    );
+  }, []);
 
   const getChannelBadge = (order: Order) => {
     if (order.channel) {
@@ -451,7 +483,7 @@ export default function OrdersPage() {
     );
     setEditError(null);
     setEditingOrder(order);
-    fetchProducts();
+    fetchProducts(undefined, order.channelId || undefined);
   };
 
   const handleEditOrder = async () => {
@@ -542,7 +574,7 @@ export default function OrdersPage() {
           <div className="relative flex-1 max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder={`${tc("search")} ${t("orderId")}, ${t("customer")}...`}
+              placeholder={`${tc("search")} ${t("orderId")}...`}
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
@@ -621,7 +653,6 @@ export default function OrdersPage() {
                   <TableHead>{t("orderId")}</TableHead>
                   <TableHead>{t("channel")}</TableHead>
                   <TableHead>渠道用户名</TableHead>
-                  <TableHead>{t("customer")}</TableHead>
                   <TableHead className="text-center">{t("items")}</TableHead>
                   <TableHead>{t("amount")}</TableHead>
                   <TableHead>{t("status")}</TableHead>
@@ -657,9 +688,6 @@ export default function OrdersPage() {
                       <TableCell>{getChannelBadge(order)}</TableCell>
                       <TableCell className="text-sm">
                         {order.channel?.shopUsername || "-"}
-                      </TableCell>
-                      <TableCell className="text-sm">
-                        {order.customer?.name || "-"}
                       </TableCell>
                       <TableCell className="text-center text-sm">
                         {order.items.length}
@@ -764,26 +792,11 @@ export default function OrdersPage() {
           </div>
           <div className="p-6">
           {selectedOrder && (
-            <Tabs defaultValue="items">
-              <TabsList className="w-full">
-                <TabsTrigger value="items" className="flex-1 gap-1">
-                  <Package className="h-4 w-4" />
-                  {t("items")}
-                </TabsTrigger>
-                <TabsTrigger value="shipping" className="flex-1 gap-1">
-                  <MapPin className="h-4 w-4" />
-                  {t("shipping")}
-                </TabsTrigger>
-                <TabsTrigger value="payment" className="flex-1 gap-1">
-                  <CreditCard className="h-4 w-4" />
-                  {t("payment")}
-                </TabsTrigger>
-                <TabsTrigger value="notes" className="flex-1 gap-1">
-                  <MessageSquare className="h-4 w-4" />
-                  {t("notes")}
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="items" className="space-y-4 mt-4">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <Package className="h-4 w-4" />
+                <span>{t("items")}</span>
+              </div>
                 <div className="space-y-3">
                   {selectedOrder.items.map((item) => (
                     <div
@@ -838,30 +851,14 @@ export default function OrdersPage() {
                     <span>{formatCurrency(selectedOrder.totalAmount)}</span>
                   </div>
                 </div>
-              </TabsContent>
-              <TabsContent value="shipping" className="mt-4">
+
+                <Separator />
+
                 <div className="space-y-3">
-                  <div className="p-4 rounded-lg bg-muted/50">
-                    <p className="font-medium text-sm">
-                      {selectedOrder.customer?.name || "-"}
-                    </p>
-                    {selectedOrder.customer?.phone && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {selectedOrder.customer.phone}
-                      </p>
-                    )}
-                    {selectedOrder.shippingAddress && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {typeof selectedOrder.shippingAddress === "string"
-                          ? selectedOrder.shippingAddress
-                          : JSON.stringify(selectedOrder.shippingAddress)}
-                      </p>
-                    )}
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <CreditCard className="h-4 w-4" />
+                    <span>{t("payment")}</span>
                   </div>
-                </div>
-              </TabsContent>
-              <TabsContent value="payment" className="mt-4">
-                <div className="space-y-3">
                   <div className="flex justify-between text-sm">
                     <span>{t("channel")}</span>
                     {getChannelBadge(selectedOrder)}
@@ -893,9 +890,14 @@ export default function OrdersPage() {
                     </div>
                   )}
                 </div>
-              </TabsContent>
-              <TabsContent value="notes" className="mt-4">
+
+                <Separator />
+
                 <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>{t("notes")}</span>
+                  </div>
                   {selectedOrder.buyerNote && (
                     <div className="p-3 rounded-lg bg-muted/50">
                       <p className="text-xs font-medium text-muted-foreground mb-1">
@@ -913,8 +915,7 @@ export default function OrdersPage() {
                     </p>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+            </div>
           )}
           </div>
         </DialogContent>
@@ -944,12 +945,19 @@ export default function OrdersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("channelUserName")} *</Label>
-                <Select value={newChannelId} onValueChange={setNewChannelId}>
+                <Select
+                  value={newChannelId}
+                  onValueChange={(val) => {
+                    setNewChannelId(val);
+                    resetNewItemProducts();
+                    fetchProducts(undefined, val || undefined);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={t("selectChannelUserName")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {channels.map((ch) => (
+                    {activeChannels.map((ch) => (
                       <SelectItem key={ch.id} value={ch.id}>
                         <div className="flex items-center gap-2">
                           <div
@@ -958,7 +966,8 @@ export default function OrdersPage() {
                               backgroundColor: ch.color || "#6b7280",
                             }}
                           />
-                          {ch.shopUsername || ch.name}
+                          <span className="font-medium">{ch.name}</span>
+                          <span className="text-xs text-muted-foreground">({ch.code})</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1016,9 +1025,10 @@ export default function OrdersPage() {
                             );
                           }
                         }}
+                        disabled={!newChannelId}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={t("selectProduct")} />
+                          <SelectValue placeholder={newChannelId ? t("selectProduct") : t("selectChannel")} />
                         </SelectTrigger>
                         <SelectContent>
                           {products.map((p) => (
@@ -1197,12 +1207,19 @@ export default function OrdersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>{t("channelUserName")} *</Label>
-                <Select value={editChannelId} onValueChange={setEditChannelId}>
+                <Select
+                  value={editChannelId}
+                  onValueChange={(val) => {
+                    setEditChannelId(val);
+                    resetEditItemProducts();
+                    fetchProducts(undefined, val || undefined);
+                  }}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder={t("selectChannelUserName")} />
                   </SelectTrigger>
                   <SelectContent>
-                    {channels.map((ch) => (
+                    {editSelectableChannels.map((ch) => (
                       <SelectItem key={ch.id} value={ch.id}>
                         <div className="flex items-center gap-2">
                           <div
@@ -1211,7 +1228,8 @@ export default function OrdersPage() {
                               backgroundColor: ch.color || "#6b7280",
                             }}
                           />
-                          {ch.shopUsername || ch.name}
+                          <span className="font-medium">{ch.name}</span>
+                          <span className="text-xs text-muted-foreground">({ch.code})</span>
                         </div>
                       </SelectItem>
                     ))}
@@ -1269,9 +1287,16 @@ export default function OrdersPage() {
                             );
                           }
                         }}
+                        disabled={!editChannelId}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={item.sku ? `${item.sku} - ${item.name}` : t("selectProduct")} />
+                          <SelectValue
+                            placeholder={
+                              item.sku
+                                ? `${item.sku} - ${item.name}`
+                                : (editChannelId ? t("selectProduct") : t("selectChannel"))
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
                           {products.map((p) => (

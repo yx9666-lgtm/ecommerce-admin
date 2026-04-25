@@ -152,6 +152,10 @@ export default function ChannelsPage() {
     }
   }, [successMsg, error]);
 
+  useEffect(() => {
+    setFormShopUsername(formCode);
+  }, [formCode]);
+
   const resetForm = () => {
     setFormName("");
     setFormCode("");
@@ -180,7 +184,7 @@ export default function ChannelsPage() {
           type: formType,
           color: formColor,
           shopName: formShopName || undefined,
-          shopUsername: formShopUsername || undefined,
+          shopUsername: formCode || undefined,
           shopUrl: formShopUrl || undefined,
           notes: formNotes || undefined,
         }),
@@ -213,7 +217,7 @@ export default function ChannelsPage() {
           name: formName,
           color: formColor,
           shopName: formShopName || null,
-          shopUsername: formShopUsername || null,
+          shopUsername: formCode || null,
           shopUrl: formShopUrl || null,
           notes: formNotes || null,
         }),
@@ -261,7 +265,7 @@ export default function ChannelsPage() {
       setFormType(ch.type);
       setFormColor(ch.color || "#6b7280");
       setFormShopName(ch.shopName || "");
-      setFormShopUsername(ch.shopUsername || "");
+      setFormShopUsername(ch.code);
       setFormShopUrl(ch.shopUrl || "");
       setFormNotes(ch.notes || "");
       setShowEditDialog(true);
@@ -305,7 +309,7 @@ export default function ChannelsPage() {
 
   const channelFormContent = (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>{t("channelName")}</Label>
           <Input
@@ -325,7 +329,7 @@ export default function ChannelsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>{t("channelType")}</Label>
           <Select value={formType} onValueChange={setFormType} disabled={!!editTarget}>
@@ -363,7 +367,7 @@ export default function ChannelsPage() {
 
       <div className="border-t pt-4">
         <p className="text-sm font-medium mb-3">{t("accountInfo")}</p>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>{t("shopName")}</Label>
             <Input
@@ -377,7 +381,8 @@ export default function ChannelsPage() {
             <Input
               placeholder={t("shopUsernamePlaceholder")}
               value={formShopUsername}
-              onChange={(e) => setFormShopUsername(e.target.value)}
+              readOnly
+              disabled
             />
           </div>
         </div>
@@ -580,7 +585,7 @@ export default function ChannelsPage() {
 
       {/* Add Channel Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="max-w-lg p-0">
+        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Plus className="h-5 w-5" />
@@ -590,9 +595,10 @@ export default function ChannelsPage() {
               {t("addChannelDesc")}
             </DialogDescription>
           </div>
-          <div className="px-6 pb-6">
-          {channelFormContent}
-          <DialogFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            {channelFormContent}
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
             <Button
               variant="outline"
               onClick={() => setShowAddDialog(false)}
@@ -609,7 +615,6 @@ export default function ChannelsPage() {
               {t("addChannel")}
             </Button>
           </DialogFooter>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -621,7 +626,7 @@ export default function ChannelsPage() {
           if (!open) setEditTarget(null);
         }}
       >
-        <DialogContent className="max-w-lg p-0">
+        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Pencil className="h-5 w-5" />
@@ -631,9 +636,10 @@ export default function ChannelsPage() {
               {t("editChannelDesc")}
             </DialogDescription>
           </div>
-          <div className="px-6 pb-6">
-          {channelFormContent}
-          <DialogFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            {channelFormContent}
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
             <Button
               variant="outline"
               onClick={() => {
@@ -653,7 +659,6 @@ export default function ChannelsPage() {
               {tc("save")}
             </Button>
           </DialogFooter>
-          </div>
         </DialogContent>
       </Dialog>
 

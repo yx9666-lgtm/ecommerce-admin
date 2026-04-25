@@ -716,6 +716,9 @@ export default function InventoryPage() {
               (() => {
                 return inventoryChannels.map((ch) => {
                   const isExpanded = expandedChannelIds.includes(ch.id);
+                  const channelVariants = variants.filter(
+                    (v) => getAllocationValue(v.id, ch.id) > 0
+                  );
                   const channelTotalAllocated = variants.reduce(
                     (sum, v) => sum + getAllocationValue(v.id, ch.id),
                     0
@@ -763,11 +766,11 @@ export default function InventoryPage() {
                       {/* Expandable table */}
                       {isExpanded && (
                         <div className="border-t">
-                          {variants.length === 0 ? (
+                          {channelVariants.length === 0 ? (
                             <div className="text-center text-muted-foreground py-8">
                               <Package className="h-8 w-8 mx-auto mb-2 opacity-30" />
                               <p className="text-sm">
-                                {channelSearch.trim() ? "没有匹配的商品" : tch("noVariants")}
+                                {channelSearch.trim() ? "没有匹配的已分配商品" : "暂无已分配商品"}
                               </p>
                             </div>
                           ) : (
@@ -789,7 +792,7 @@ export default function InventoryPage() {
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {variants.map((v) => {
+                                {channelVariants.map((v) => {
                                   const allocated = getAllocationValue(v.id, ch.id);
                                   const totalAllocatedAllChannels = inventoryChannels.reduce(
                                     (sum, c) => sum + getAllocationValue(v.id, c.id),
@@ -830,7 +833,11 @@ export default function InventoryPage() {
                                         {v.channelSales[ch.id] || 0}
                                       </TableCell>
                                       <TableCell className="text-sm">
-                                        {unallocated}
+                                        {allocated > 0 ? (
+                                          unallocated
+                                        ) : (
+                                          ""
+                                        )}
                                       </TableCell>
                                     </TableRow>
                                   );

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { existsSync } from "fs";
 import path from "path";
-import { getAuthContext, withTryCatch } from "@/lib/api-utils";
+import { assertStoreOwnership, getAuthContext, withTryCatch } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 
@@ -40,8 +40,28 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const status = searchParams.get("status");
   const search = searchParams.get("search");
   const fields = searchParams.get("fields");
+  const channelId = searchParams.get("channelId");
 
   const where: any = { storeId };
+  if (channelId) {
+    const channel = await prisma.channel.findUnique({
+      where: { id: channelId },
+      select: { storeId: true },
+    });
+    const ownershipError = assertStoreOwnership(channel?.storeId, storeId);
+    if (ownershipError) return ownershipError;
+
+    where.variants = {
+      some: {
+        channelInventory: {
+          some: {
+            channelId,
+            allocated: { gt: 0 },
+          },
+        },
+      },
+    };
+  }
   if (status && status !== "all") where.status = status;
   if (search) {
     where.OR = [

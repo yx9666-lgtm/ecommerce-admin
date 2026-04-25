@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/date-input";
@@ -33,6 +33,9 @@ interface FinanceSummary {
   totalRevenue: number;
   totalManualIncome: number;
   totalExpenses: number;
+  totalManualExpenses: number;
+  totalPurchaseExpenses: number;
+  purchaseExpenseCount: number;
   totalCommission: number;
   netProfit: number;
   channelRevenue: {
@@ -50,11 +53,23 @@ interface FinanceSummary {
     expenses: number;
     profit: number;
   }[];
+  recentPurchases: {
+    id: string;
+    poNumber: string;
+    totalAmountLocal: number;
+    notes: string | null;
+    createdAt: string;
+    expectedDate: string | null;
+    supplier: {
+      name: string;
+      supplierNo: string;
+    };
+  }[];
 }
 
 interface FinanceRecord {
   id: string;
-  type: "order" | "income" | "expense";
+  type: "order" | "income" | "expense" | "purchase";
   category: string;
   amount: number;
   note: string | null;
@@ -76,10 +91,9 @@ export default function FinancePage() {
   const [expenseTotal, setExpenseTotal] = useState(0);
   const [incomes, setIncomes] = useState<any[]>([]);
   const [incomeTotal, setIncomeTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [expensePage, setExpensePage] = useState(1);
-  const [incomePage, setIncomePage] = useState(1);
-  const [pageSize] = useState(20);
+  const [recordPage, setRecordPage] = useState(1);
+  const pageSize = 20;
+  const sourcePageSize = 500;
   const [loading, setLoading] = useState(true);
   const [showChart, setShowChart] = useState(false);
   const [startDate, setStartDate] = useState("");
@@ -135,18 +149,18 @@ export default function FinancePage() {
 
   const fetchOrders = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: page.toString(), pageSize: pageSize.toString() });
+      const params = new URLSearchParams({ page: "1", pageSize: sourcePageSize.toString() });
       const res = await fetch(`/api/orders?${params}`);
       if (res.ok) {
         const data = await res.json();
         setOrders(data.items || []);
       }
     } catch { /* ignore */ }
-  }, [page, pageSize]);
+  }, [sourcePageSize]);
 
   const fetchExpenses = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: expensePage.toString(), pageSize: pageSize.toString() });
+      const params = new URLSearchParams({ page: "1", pageSize: sourcePageSize.toString() });
       const res = await fetch(`/api/expenses?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -154,11 +168,11 @@ export default function FinancePage() {
         setExpenseTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-  }, [expensePage, pageSize]);
+  }, [sourcePageSize]);
 
   const fetchIncomes = useCallback(async () => {
     try {
-      const params = new URLSearchParams({ page: incomePage.toString(), pageSize: pageSize.toString() });
+      const params = new URLSearchParams({ page: "1", pageSize: sourcePageSize.toString() });
       const res = await fetch(`/api/incomes?${params}`);
       if (res.ok) {
         const data = await res.json();
@@ -166,7 +180,7 @@ export default function FinancePage() {
         setIncomeTotal(data.total || 0);
       }
     } catch { /* ignore */ }
-  }, [incomePage, pageSize]);
+  }, [sourcePageSize]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -234,6 +248,19 @@ export default function FinancePage() {
     });
   }
 
+  // Purchase orders (system expense)
+  for (const po of summary?.recentPurchases || []) {
+    allRecords.push({
+      id: `purchase-${po.id}`,
+      type: "purchase",
+      category: `采购单 ${po.poNumber}`,
+      amount: po.totalAmountLocal || 0,
+      note: po.notes,
+      date: po.expectedDate || po.createdAt,
+      shopUsername: po.supplier?.supplierNo || undefined,
+    });
+  }
+
   // Sort by date desc (newest first)
   allRecords.sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -254,6 +281,24 @@ export default function FinancePage() {
     }
     return true;
   });
+
+  useEffect(() => {
+    setRecordPage(1);
+  }, [startDate, endDate]);
+
+  const totalFilteredRecords = filteredRecords.length;
+  const totalRecordPages = Math.max(1, Math.ceil(totalFilteredRecords / pageSize));
+  const currentRecordPage = Math.min(recordPage, totalRecordPages);
+  const pagedRecords = filteredRecords.slice(
+    (currentRecordPage - 1) * pageSize,
+    currentRecordPage * pageSize
+  );
+
+  useEffect(() => {
+    if (recordPage > totalRecordPages) {
+      setRecordPage(totalRecordPages);
+    }
+  }, [recordPage, totalRecordPages]);
 
   const handleCreateExpense = async () => {
     if (!expCategory || !expAmount || !expDate) {
@@ -304,7 +349,7 @@ export default function FinancePage() {
   };
 
   const handleDeleteRecord = async (record: FinanceRecord) => {
-    if (record.type === "order") return;
+    if (record.type === "order" || record.type === "purchase") return;
     const typeName = record.type === "income" ? "收入" : "支出";
     if (!confirm(`确定要删除此${typeName}记录吗？`)) return;
     const endpoint = record.type === "income" ? "incomes" : "expenses";
@@ -313,6 +358,7 @@ export default function FinancePage() {
   };
 
   const handleEditRecord = (record: FinanceRecord) => {
+    if (record.type === "order" || record.type === "purchase") return;
     setEditingRecord(record);
     setEditRecordCategory(record.category);
     setEditRecordAmount(String(record.amount));
@@ -349,11 +395,26 @@ export default function FinancePage() {
     finally { setSavingRecord(false); }
   };
 
-  const totalRecords = expenseTotal + incomeTotal + orders.length;
   const totalRevenue = summary?.totalRevenue || 0;
   const totalExpenses = summary?.totalExpenses || 0;
   const totalCommission = summary?.totalCommission || 0;
   const netProfit = summary?.netProfit || 0;
+  const expenseCount = (summary?.purchaseExpenseCount || 0) + expenseTotal;
+  const NO_SHOP_USERNAME_VALUE = "__none__";
+  const channelUsernameOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return (channels || [])
+      .map((ch) => ({
+        name: ch.name as string,
+        shopUsername: (ch.shopUsername || "").trim(),
+        isActive: ch.isActive !== false,
+      }))
+      .filter((ch) => {
+        if (!ch.isActive || !ch.shopUsername || seen.has(ch.shopUsername)) return false;
+        seen.add(ch.shopUsername);
+        return true;
+      });
+  }, [channels]);
 
   return (
     <div className="space-y-6">
@@ -387,7 +448,7 @@ export default function FinancePage() {
                   {loading ? "-" : formatCurrency(totalExpenses)}
                 </p>
                 <div className="flex items-center gap-1 mt-1">
-                  <span className="text-xs text-muted-foreground">{expenseTotal} {tc("items")}</span>
+                  <span className="text-xs text-muted-foreground">{expenseCount} {tc("items")}</span>
                 </div>
               </div>
               <div className="bg-red-50 p-3 rounded-xl"><Wallet className="h-6 w-6 text-red-600" /></div>
@@ -533,7 +594,7 @@ export default function FinancePage() {
             <div className="flex items-center justify-center h-32">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-          ) : filteredRecords.length === 0 ? (
+          ) : totalFilteredRecords === 0 ? (
             <div className="flex items-center justify-center h-32 text-muted-foreground">{tc("noData")}</div>
           ) : (
             <>
@@ -552,7 +613,7 @@ export default function FinancePage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredRecords.map((record) => {
+                  {pagedRecords.map((record) => {
                     // Calculate net for every row
                     let netAmount = 0;
                     if (record.type === "order") {
@@ -571,6 +632,8 @@ export default function FinancePage() {
                         <TableCell className="text-center">
                           {record.type === "order" ? (
                             <Badge variant="outline" className="bg-gold-400/15 text-gold-600 dark:text-gold-400 border-0">渠道收入</Badge>
+                          ) : record.type === "purchase" ? (
+                            <Badge variant="outline" className="bg-orange-500/15 text-orange-600 dark:text-orange-400 border-0">采购支出</Badge>
                           ) : record.type === "income" ? (
                             <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">收入</Badge>
                           ) : (
@@ -590,11 +653,13 @@ export default function FinancePage() {
                         </TableCell>
                         {/* 金额: only for order & income */}
                         <TableCell className="text-center text-sm">
-                          {record.type === "expense" ? "-" : `+${formatCurrency(record.amount)}`}
+                          {record.type === "expense" || record.type === "purchase" ? "-" : `+${formatCurrency(record.amount)}`}
                         </TableCell>
                         {/* 支出: for expense rows and order commission */}
                         <TableCell className="text-center text-sm">
-                          {record.type === "expense"
+                          {record.type === "purchase"
+                            ? formatCurrency(record.amount)
+                            : record.type === "expense"
                             ? formatCurrency(record.amount)
                             : record.type === "order" && record.commission
                               ? formatCurrency(record.commission)
@@ -609,7 +674,7 @@ export default function FinancePage() {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
-                            {record.type !== "order" && (
+                            {record.type !== "order" && record.type !== "purchase" && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -636,21 +701,29 @@ export default function FinancePage() {
                   })}
                 </TableBody>
               </Table>
-              {(expenseTotal + incomeTotal) > pageSize && (
-                <div className="flex items-center justify-between p-4">
-                  <p className="text-sm text-muted-foreground">
-                    {tc("showing")} {filteredRecords.length} {tc("items")}
-                  </p>
-                  <div className="flex gap-1">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                      {tc("previous")}
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={filteredRecords.length < pageSize} onClick={() => setPage(page + 1)}>
-                      {tc("next")}
-                    </Button>
-                  </div>
+              <div className="flex items-center justify-between p-4">
+                <p className="text-sm text-muted-foreground">
+                  共 {totalFilteredRecords} 条，第 {currentRecordPage}/{totalRecordPages} 页
+                </p>
+                <div className="flex gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentRecordPage <= 1}
+                    onClick={() => setRecordPage((p) => Math.max(1, p - 1))}
+                  >
+                    {tc("previous")}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentRecordPage >= totalRecordPages}
+                    onClick={() => setRecordPage((p) => Math.min(totalRecordPages, p + 1))}
+                  >
+                    {tc("next")}
+                  </Button>
                 </div>
-              )}
+              </div>
             </>
           )}
         </CardContent>
@@ -658,7 +731,7 @@ export default function FinancePage() {
 
       {/* Add Expense Dialog */}
       <Dialog open={showExpenseDialog} onOpenChange={setShowExpenseDialog}>
-        <DialogContent className="p-0">
+        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingDown className="h-5 w-5" />
@@ -668,7 +741,7 @@ export default function FinancePage() {
               记录新的支出
             </DialogDescription>
           </div>
-          <div className="px-6 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {expenseError && (
             <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2 text-sm">{expenseError}</div>
           )}
@@ -687,13 +760,19 @@ export default function FinancePage() {
             </div>
             <div className="space-y-2">
               <Label>渠道用户名</Label>
-              <Select value={expShopUsername} onValueChange={setExpShopUsername}>
+              <Select
+                value={expShopUsername || NO_SHOP_USERNAME_VALUE}
+                onValueChange={(value) =>
+                  setExpShopUsername(value === NO_SHOP_USERNAME_VALUE ? "" : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="选择渠道用户名（可选）" />
                 </SelectTrigger>
                 <SelectContent>
-                  {channels.filter(c => c.shopUsername).map((ch) => (
-                    <SelectItem key={ch.id} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
+                  <SelectItem value={NO_SHOP_USERNAME_VALUE}>不选择</SelectItem>
+                  {channelUsernameOptions.map((ch) => (
+                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -703,20 +782,20 @@ export default function FinancePage() {
               <Input placeholder="备注（可选）" value={expNote} onChange={(e) => setExpNote(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={() => setShowExpenseDialog(false)} disabled={creatingExpense}>{tc("cancel")}</Button>
             <Button className="gap-1" onClick={handleCreateExpense} disabled={creatingExpense}>
               {creatingExpense ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {tc("save")}
             </Button>
           </DialogFooter>
-          </div>
         </DialogContent>
       </Dialog>
 
       {/* Add Income Dialog */}
       <Dialog open={showIncomeDialog} onOpenChange={setShowIncomeDialog}>
-        <DialogContent className="p-0">
+        <DialogContent className="max-w-lg max-h-[90vh] p-0 gap-0 overflow-hidden flex flex-col">
           <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <TrendingUp className="h-5 w-5" />
@@ -726,7 +805,7 @@ export default function FinancePage() {
               记录新的收入
             </DialogDescription>
           </div>
-          <div className="px-6 pb-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
           {incomeError && (
             <div className="bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2 text-sm">{incomeError}</div>
           )}
@@ -745,13 +824,19 @@ export default function FinancePage() {
             </div>
             <div className="space-y-2">
               <Label>渠道用户名</Label>
-              <Select value={incShopUsername} onValueChange={setIncShopUsername}>
+              <Select
+                value={incShopUsername || NO_SHOP_USERNAME_VALUE}
+                onValueChange={(value) =>
+                  setIncShopUsername(value === NO_SHOP_USERNAME_VALUE ? "" : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="选择渠道用户名（可选）" />
                 </SelectTrigger>
                 <SelectContent>
-                  {channels.filter(c => c.shopUsername).map((ch) => (
-                    <SelectItem key={ch.id} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
+                  <SelectItem value={NO_SHOP_USERNAME_VALUE}>不选择</SelectItem>
+                  {channelUsernameOptions.map((ch) => (
+                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -761,14 +846,14 @@ export default function FinancePage() {
               <Input placeholder="备注（可选）" value={incNote} onChange={(e) => setIncNote(e.target.value)} />
             </div>
           </div>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
             <Button variant="outline" onClick={() => setShowIncomeDialog(false)} disabled={creatingIncome}>{tc("cancel")}</Button>
             <Button className="gap-1" onClick={handleCreateIncome} disabled={creatingIncome}>
               {creatingIncome ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               {tc("save")}
             </Button>
           </DialogFooter>
-          </div>
         </DialogContent>
       </Dialog>
 
@@ -807,13 +892,19 @@ export default function FinancePage() {
             </div>
             <div className="space-y-2">
               <Label>渠道用户名</Label>
-              <Select value={editRecordShopUsername} onValueChange={setEditRecordShopUsername}>
+              <Select
+                value={editRecordShopUsername || NO_SHOP_USERNAME_VALUE}
+                onValueChange={(value) =>
+                  setEditRecordShopUsername(value === NO_SHOP_USERNAME_VALUE ? "" : value)
+                }
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="选择渠道用户名（可选）" />
                 </SelectTrigger>
                 <SelectContent>
-                  {channels.filter(c => c.shopUsername).map((ch) => (
-                    <SelectItem key={ch.id} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
+                  <SelectItem value={NO_SHOP_USERNAME_VALUE}>不选择</SelectItem>
+                  {channelUsernameOptions.map((ch) => (
+                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

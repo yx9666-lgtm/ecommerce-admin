@@ -64,7 +64,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const [products, total, actions, warehouses, lowStockRaw] = await Promise.all([
     prisma.product.findMany({
       where: productWhere,
-      orderBy: { createdAt: "desc" },
+      orderBy: { sku: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
