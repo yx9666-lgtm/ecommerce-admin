@@ -41,7 +41,7 @@ const CODE_TO_PLATFORM: Record<string, string> = {
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.orders.view);
+  const denied = requirePermission(ctx, PERMISSIONS.orders.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

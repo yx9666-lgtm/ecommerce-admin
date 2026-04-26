@@ -30,7 +30,7 @@ function normalizeStockStatusThresholds(input: unknown, fallbackLow: number) {
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.inventory.view);
+  const denied = requirePermission(ctx, PERMISSIONS.inventory.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
   const store = await prisma.store.findUnique({

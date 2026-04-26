@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch, apiSuccess } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 // ─── Zod Schema ─────────────────────────────────────────────────────────────
 
@@ -30,6 +31,10 @@ function computeStatus(startDate: Date, endDate: Date): string {
 export const GET = withTryCatch(async (_req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.marketing.tableView);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const promotions = await prisma.promotion.findMany({
@@ -54,6 +59,10 @@ export const GET = withTryCatch(async (_req: NextRequest) => {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.marketing.create);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const body = await parseBody(req, createPromotionSchema);

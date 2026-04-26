@@ -18,7 +18,7 @@ const createSupplierSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.suppliers.view);
+  const denied = requirePermission(ctx, PERMISSIONS.suppliers.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

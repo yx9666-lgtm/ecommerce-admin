@@ -25,17 +25,17 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { key: "dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.view" },
-  { key: "products", href: "/products", icon: Package, permission: "products.view" },
-  { key: "orders", href: "/orders", icon: ShoppingCart, permission: "orders.view" },
-  { key: "purchasing", href: "/purchasing", icon: ClipboardList, permission: "purchasing.view" },
-  { key: "suppliers", href: "/suppliers", icon: Building2, permission: "suppliers.view" },
-  { key: "warehouses", href: "/warehouses", icon: Container, permission: "warehouses.view" },
-  { key: "inventory", href: "/inventory", icon: Warehouse, permission: "inventory.view" },
-  { key: "finance", href: "/finance", icon: DollarSign, permission: "finance.view" },
-  { key: "analytics", href: "/analytics", icon: BarChart3, permission: "analytics.view" },
-  { key: "platforms", href: "/platforms", icon: Link2, permission: "platforms.view" },
-  { key: "settings", href: "/settings", icon: Settings, permission: "settings.view" },
+  { key: "dashboard", href: "/dashboard", icon: LayoutDashboard, permission: "dashboard.page.view" },
+  { key: "products", href: "/products", icon: Package, permission: "products.page.view" },
+  { key: "orders", href: "/orders", icon: ShoppingCart, permission: "orders.page.view" },
+  { key: "purchasing", href: "/purchasing", icon: ClipboardList, permission: "purchasing.page.view" },
+  { key: "suppliers", href: "/suppliers", icon: Building2, permission: "suppliers.page.view" },
+  { key: "warehouses", href: "/warehouses", icon: Container, permission: "warehouses.page.view" },
+  { key: "inventory", href: "/inventory", icon: Warehouse, permission: "inventory.page.view" },
+  { key: "finance", href: "/finance", icon: DollarSign, permission: "finance.page.view" },
+  { key: "analytics", href: "/analytics", icon: BarChart3, permission: "analytics.page.view" },
+  { key: "platforms", href: "/platforms", icon: Link2, permission: "platforms.page.view" },
+  { key: "settings", href: "/settings", icon: Settings, permission: "settings.page.view" },
 ];
 
 export function Sidebar() {

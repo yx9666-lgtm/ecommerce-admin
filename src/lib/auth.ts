@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import prisma from "./db";
 import logger from "./logger";
+import { expandPermissionMap } from "./permissions";
 
 // Simple sliding-window rate limiter for login attempts
 const loginAttempts = new Map<string, number[]>();
@@ -80,7 +81,7 @@ export const authOptions: NextAuthOptions = {
           let permissions: Record<string, boolean> = {};
           if (defaultStoreId && user.role !== "SUPER_ADMIN") {
             const su = user.stores[0];
-            permissions = (su?.permissions as Record<string, boolean>) || {};
+            permissions = expandPermissionMap((su?.permissions as Record<string, boolean>) || {});
           }
 
           return {
@@ -119,14 +120,14 @@ export const authOptions: NextAuthOptions = {
         try {
           const stores = (token.stores as any[]) || [];
           const storeId = stores[0]?.id;
-          if (storeId && token.sub) {
-            const su = await prisma.storeUser.findUnique({
-              where: { storeId_userId: { storeId, userId: token.sub } },
-              select: { permissions: true },
-            });
-            token.permissions = (su?.permissions as Record<string, boolean>) || {};
-          }
-        } catch {}
+            if (storeId && token.sub) {
+              const su = await prisma.storeUser.findUnique({
+                where: { storeId_userId: { storeId, userId: token.sub } },
+                select: { permissions: true },
+              });
+              token.permissions = expandPermissionMap((su?.permissions as Record<string, boolean>) || {});
+            }
+          } catch {}
         token.permissionsLoadedAt = Date.now();
       }
       return token;

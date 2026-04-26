@@ -20,6 +20,7 @@ interface Product {
   costPrice: number; sellingPrice: number; totalStock: number;
   status: string; brand: string | null; images: any[];
   realStock?: number;
+  salesQty?: number;
   allImages?: string[];
   imageCount?: number;
 }
@@ -127,6 +128,7 @@ export default function ProductsPage() {
                   <TableHead>商品图片</TableHead>
                   <TableHead>{t("costPrice")}</TableHead>
                   <TableHead className="text-center">采购数量</TableHead>
+                  <TableHead className="text-center">销售数量</TableHead>
                   <TableHead className="text-center">真实库存</TableHead>
                   <TableHead className="text-center">{t("status")}</TableHead>
                 </TableRow>
@@ -150,6 +152,9 @@ export default function ProductsPage() {
                       <TableCell className="text-sm font-mono tabular-nums">{formatCurrency(product.costPrice)}</TableCell>
                       <TableCell className="text-sm font-mono tabular-nums text-center">
                         {product.totalStock}
+                      </TableCell>
+                      <TableCell className="text-sm font-mono tabular-nums text-center">
+                        {product.salesQty ?? 0}
                       </TableCell>
                       <TableCell className="text-sm font-mono tabular-nums text-center">
                         {product.realStock ?? 0}

@@ -4,7 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { z } from "zod";
 import logger from "@/lib/logger";
 import prisma from "@/lib/db";
-import type { PermissionMap } from "@/lib/permissions";
+import { expandPermissionMap, type PermissionMap } from "@/lib/permissions";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ export async function getAuthContext(req?: NextRequest): Promise<AuthContext | N
       where: { storeId_userId: { storeId, userId: session.user.id } },
       select: { permissions: true },
     });
-    permissions = (storeUser?.permissions as PermissionMap) || {};
+    permissions = expandPermissionMap((storeUser?.permissions as PermissionMap) || {});
   }
 
   return {

@@ -2,10 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { createPlatformAdapter, PlatformType } from "@/lib/platforms";
 import { getAuthContext, assertStoreOwnership, withTryCatch } from "@/lib/api-utils";
+import { PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.edit);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const body = await req.json();

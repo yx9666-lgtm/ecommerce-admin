@@ -8,7 +8,7 @@ import { requirePermission, PERMISSIONS } from "@/lib/permissions";
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  const denied = requirePermission(ctx, PERMISSIONS.settings.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

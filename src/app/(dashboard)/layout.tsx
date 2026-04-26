@@ -2,17 +2,44 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { TopNav } from "@/components/layout/top-nav";
 import { useAuthStore } from "@/stores/auth-store";
+import { usePermissions } from "@/hooks/use-permissions";
 import { Loader2 } from "lucide-react";
+
+const pagePermissionMatchers: Array<{ prefix: string; permission: string }> = [
+  { prefix: "/dashboard", permission: "dashboard.page.view" },
+  { prefix: "/products", permission: "products.page.view" },
+  { prefix: "/orders", permission: "orders.page.view" },
+  { prefix: "/purchasing", permission: "purchasing.page.view" },
+  { prefix: "/suppliers", permission: "suppliers.page.view" },
+  { prefix: "/warehouses", permission: "warehouses.page.view" },
+  { prefix: "/inventory", permission: "inventory.page.view" },
+  { prefix: "/finance", permission: "finance.page.view" },
+  { prefix: "/analytics", permission: "analytics.page.view" },
+  { prefix: "/platforms", permission: "platforms.page.view" },
+  { prefix: "/settings", permission: "settings.page.view" },
+  { prefix: "/customers", permission: "customers.page.view" },
+  { prefix: "/logistics", permission: "logistics.page.view" },
+  { prefix: "/marketing", permission: "marketing.page.view" },
+];
+
+function getRequiredPagePermission(pathname: string) {
+  return pagePermissionMatchers.find(
+    (matcher) => pathname === matcher.prefix || pathname.startsWith(`${matcher.prefix}/`)
+  )?.permission;
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
   const theme = useAuthStore((s) => s.theme);
+  const { can } = usePermissions();
 
   useEffect(() => {
     useAuthStore.persist.rehydrate();
@@ -48,6 +75,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   if (!session) return null;
+  const requiredPermission = getRequiredPagePermission(pathname);
+  const hasPageAccess = !requiredPermission || can(requiredPermission);
+  if (!hasPageAccess) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="text-lg font-semibold text-foreground">无权访问</p>
+          <p className="mt-2 text-sm text-muted-foreground">当前账号没有该页面的访问权限</p>
+        </div>
+      </div>
+    );
+  }
 
   const isDark = theme === "dark";
 

@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { createPlatformAdapter, PlatformType } from "@/lib/platforms";
 import { ShopeeAdapter } from "@/lib/platforms/shopee";
 import { getAuthContext, assertStoreOwnership, withTryCatch, parseBody } from "@/lib/api-utils";
+import { PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 const syncSchema = z.object({
   connectionId: z.string().min(1),
@@ -13,6 +14,10 @@ const syncSchema = z.object({
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.edit);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const body = await parseBody(req, syncSchema);

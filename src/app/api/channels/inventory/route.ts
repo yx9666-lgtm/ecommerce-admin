@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/db";
 import { getAuthContext, assertStoreOwnership, withTryCatch, parseBody } from "@/lib/api-utils";
+import { PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 const allocateInventorySchema = z.object({
   channelId: z.string().min(1),
@@ -13,6 +14,10 @@ const allocateInventorySchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.inventory.tableView);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const channelId = req.nextUrl.searchParams.get("channelId");
@@ -236,6 +241,10 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 export const POST = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.inventory.edit);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const body = await parseBody(req, allocateInventorySchema);

@@ -16,7 +16,7 @@ const createExpenseSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.finance.view);
+  const denied = requirePermission(ctx, PERMISSIONS.finance.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

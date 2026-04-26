@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getAuthContext, parseBody, withTryCatch, assertStoreOwnership } from "@/lib/api-utils";
 import prisma from "@/lib/db";
+import { PERMISSIONS, requirePermission } from "@/lib/permissions";
 
 const updatePromotionSchema = z.object({
   nameZh: z.string().min(1).optional(),
@@ -18,6 +19,10 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.marketing.edit);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const existing = await prisma.promotion.findUnique({ where: { id }, select: { storeId: true } });
@@ -45,6 +50,10 @@ export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
   const { id } = context!.params;
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+
+  const denied = requirePermission(ctx, PERMISSIONS.marketing.delete);
+  if (denied) return denied;
+
   const { storeId } = ctx;
 
   const existing = await prisma.promotion.findUnique({ where: { id }, select: { storeId: true } });

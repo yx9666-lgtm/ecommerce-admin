@@ -10,7 +10,7 @@ import { requirePermission, PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "@/lib/
 export const GET = withTryCatch(async () => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.settings.view);
+  const denied = requirePermission(ctx, PERMISSIONS.settings.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

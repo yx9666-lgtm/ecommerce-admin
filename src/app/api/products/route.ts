@@ -30,7 +30,7 @@ function imageUrlHasFile(url: string) {
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.products.view);
+  const denied = requirePermission(ctx, PERMISSIONS.products.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 
@@ -111,8 +111,33 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     prisma.product.count({ where }),
   ]);
 
-  // Build PO image fallback map by SKU
   const skus = products.map((p) => p.sku);
+  const productIds = products.map((p) => p.id);
+  const orderItems =
+    skus.length > 0
+      ? await prisma.orderItem.findMany({
+          where: {
+            order: {
+              storeId,
+              status: { in: ["COMPLETED", "SHIPPED", "DELIVERED", "PENDING_SHIPMENT"] },
+            },
+            OR: [
+              { productId: { in: productIds } },
+              { sku: { in: skus } },
+            ],
+          },
+          select: { productId: true, sku: true, quantity: true },
+        })
+      : [];
+
+  const salesByProductId: Record<string, number> = {};
+  const salesBySku: Record<string, number> = {};
+  orderItems.forEach((item) => {
+    if (item.productId) salesByProductId[item.productId] = (salesByProductId[item.productId] || 0) + item.quantity;
+    if (item.sku) salesBySku[item.sku] = (salesBySku[item.sku] || 0) + item.quantity;
+  });
+
+  // Build PO image fallback map by SKU
   let poImageMap: Record<string, string[]> = {};
   if (skus.length > 0) {
     const poItems = await prisma.purchaseOrderItem.findMany({
@@ -135,14 +160,16 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       0
     );
     const hasInventoryRecords = p.variants.some((v) => v.inventory.length > 0);
-    const realStock = hasInventoryRecords ? inventoryRealStock : p.totalStock;
+    const salesQty = salesByProductId[p.id] || salesBySku[p.sku] || 0;
+    const baseStock = hasInventoryRecords ? inventoryRealStock : p.totalStock;
+    const realStock = baseStock - salesQty;
     const { variants, ...rest } = p;
     const validProductImages = p.images.map((img) => img.url).filter(imageUrlHasFile);
     // Use ProductImage if available, otherwise fallback to PO images
     const allImages = validProductImages.length > 0
       ? validProductImages
       : (poImageMap[p.sku] || []);
-    return { ...rest, realStock, allImages, imageCount: allImages.length };
+    return { ...rest, realStock, salesQty, allImages, imageCount: allImages.length };
   });
 
   return NextResponse.json({ items, total, page, pageSize });

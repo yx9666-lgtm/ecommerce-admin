@@ -32,7 +32,7 @@ const createPurchaseOrderSchema = z.object({
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
-  const denied = requirePermission(ctx, PERMISSIONS.purchasing.view);
+  const denied = requirePermission(ctx, PERMISSIONS.purchasing.tableView);
   if (denied) return denied;
   const { storeId } = ctx;
 

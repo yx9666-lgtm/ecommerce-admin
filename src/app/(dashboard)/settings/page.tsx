@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useAuthStore } from "@/stores/auth-store";
-import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS } from "@/lib/permissions";
+import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS, expandPermissionMap } from "@/lib/permissions";
 import { buildSkuFromSerial, normalizeSkuConfig, type SkuConfig } from "@/lib/sku-config";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,7 +22,6 @@ import {
   Users,
   Shield,
   Store,
-  Bell,
   Globe,
   ScrollText,
   Plus,
@@ -32,9 +30,6 @@ import {
   Save,
   Loader2,
   Tag,
-  Bookmark,
-  Ruler,
-  ArrowLeftRight,
   Download,
   AlertTriangle,
 } from "lucide-react";
@@ -104,27 +99,6 @@ type CategoryItem = {
   position: number;
 };
 
-type BrandItem = {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  position: number;
-};
-
-type UnitItem = {
-  id: string;
-  name: string;
-  nameEn: string | null;
-  symbol: string | null;
-};
-
-type ExchangeRateItem = {
-  id: string;
-  fromCurrency: string;
-  toCurrency: string;
-  rate: number;
-};
-
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -167,31 +141,6 @@ export default function SettingsPage() {
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryMsg, setCategoryMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  // ── Brands state ──
-  const [brands, setBrands] = useState<BrandItem[]>([]);
-  const [brandsLoading, setBrandsLoading] = useState(true);
-  const [showBrandDialog, setShowBrandDialog] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<BrandItem | null>(null);
-  const [brandForm, setBrandForm] = useState({ name: "", nameEn: "", position: 0 });
-  const [brandSaving, setBrandSaving] = useState(false);
-  const [brandMsg, setBrandMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // ── Units state ──
-  const [units, setUnits] = useState<UnitItem[]>([]);
-  const [unitsLoading, setUnitsLoading] = useState(true);
-  const [showUnitDialog, setShowUnitDialog] = useState(false);
-  const [editingUnit, setEditingUnit] = useState<UnitItem | null>(null);
-  const [unitForm, setUnitForm] = useState({ name: "", nameEn: "", symbol: "" });
-  const [unitSaving, setUnitSaving] = useState(false);
-  const [unitMsg, setUnitMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // ── Exchange Rates state ──
-  const [exchangeRates, setExchangeRates] = useState<ExchangeRateItem[]>([]);
-  const [ratesLoading, setRatesLoading] = useState(true);
-  const [rateForm, setRateForm] = useState({ fromCurrency: "", toCurrency: "", rate: "" });
-  const [rateSaving, setRateSaving] = useState(false);
-  const [rateMsg, setRateMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
   // ── Export state ──
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -206,17 +155,6 @@ export default function SettingsPage() {
   const [newUser, setNewUser] = useState({ displayName: "", username: "", password: "", role: "" });
   const [userSaving, setUserSaving] = useState(false);
   const [userMsg, setUserMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
-  // ── Notifications ──
-  const [notifications, setNotifications] = useState({
-    email: true,
-    lowStock: true,
-    newOrder: true,
-    syncError: true,
-    refund: false,
-  });
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
-  const [notificationsSaving, setNotificationsSaving] = useState(false);
 
   // ── Permissions dialog state ──
   const [showPermDialog, setShowPermDialog] = useState(false);
@@ -305,82 +243,12 @@ export default function SettingsPage() {
     }
   }, []);
 
-  const fetchBrands = useCallback(async () => {
-    setBrandsLoading(true);
-    try {
-      const res = await fetch("/api/brands");
-      if (res.ok) setBrands(await res.json());
-    } catch {
-      // silent
-    } finally {
-      setBrandsLoading(false);
-    }
-  }, []);
-
-  const fetchUnits = useCallback(async () => {
-    setUnitsLoading(true);
-    try {
-      const res = await fetch("/api/units");
-      if (res.ok) setUnits(await res.json());
-    } catch {
-      // silent
-    } finally {
-      setUnitsLoading(false);
-    }
-  }, []);
-
-  const fetchExchangeRates = useCallback(async () => {
-    setRatesLoading(true);
-    try {
-      const res = await fetch("/api/exchange-rates");
-      if (res.ok) setExchangeRates(await res.json());
-    } catch {
-      // silent
-    } finally {
-      setRatesLoading(false);
-    }
-  }, []);
-
-  const fetchNotifications = useCallback(async () => {
-    setNotificationsLoading(true);
-    try {
-      const res = await fetch("/api/settings/notifications");
-      if (res.ok) setNotifications(await res.json());
-    } catch {
-      // silent
-    } finally {
-      setNotificationsLoading(false);
-    }
-  }, []);
-
-  const saveNotification = async (key: string, checked: boolean) => {
-    const updated = { ...notifications, [key]: checked };
-    setNotifications(updated);
-    setNotificationsSaving(true);
-    try {
-      await fetch("/api/settings/notifications", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [key]: checked }),
-      });
-    } catch {
-      // revert on error
-      setNotifications(notifications);
-    } finally {
-      setNotificationsSaving(false);
-    }
-  };
-
   useEffect(() => {
     fetchUsers();
     fetchStore();
     fetchLogs();
     fetchCategories();
-    fetchBrands();
-    fetchUnits();
-    fetchExchangeRates();
-    fetchNotifications();
-  }, [fetchUsers, fetchStore, fetchLogs, fetchCategories, fetchBrands, fetchUnits, fetchExchangeRates, fetchNotifications]);
+  }, [fetchUsers, fetchStore, fetchLogs, fetchCategories]);
 
   useEffect(() => {
     const count = Math.max(1, Math.min(5, parseInt(skuPartCount, 10) || 2));
@@ -541,7 +409,7 @@ export default function SettingsPage() {
       const res = await fetch(`/api/settings/users/${user.id}/permissions`);
       if (res.ok) {
         const data = await res.json();
-        setPermMap(data.permissions || {});
+        setPermMap(expandPermissionMap(data.permissions || {}));
       }
     } catch {
       // silent
@@ -649,137 +517,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ── Brand handlers ──
-
-  const openBrandDialog = (brand?: BrandItem) => {
-    if (brand) {
-      setEditingBrand(brand);
-      setBrandForm({ name: brand.name, nameEn: brand.nameEn || "", position: brand.position });
-    } else {
-      setEditingBrand(null);
-      setBrandForm({ name: "", nameEn: "", position: 0 });
-    }
-    setBrandMsg(null);
-    setShowBrandDialog(true);
-  };
-
-  const handleSaveBrand = async () => {
-    setBrandSaving(true);
-    setBrandMsg(null);
-    try {
-      const url = editingBrand ? `/api/brands/${editingBrand.id}` : "/api/brands";
-      const method = editingBrand ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(brandForm),
-      });
-      if (res.ok) {
-        setBrandMsg({ type: "success", text: editingBrand ? t("brandSaved") : t("brandCreated") });
-        fetchBrands();
-        setTimeout(() => setShowBrandDialog(false), 800);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setBrandMsg({ type: "error", text: err.error || t("saveFailed") });
-      }
-    } catch {
-      setBrandMsg({ type: "error", text: t("networkError") });
-    } finally {
-      setBrandSaving(false);
-    }
-  };
-
-  const handleDeleteBrand = async (id: string) => {
-    if (!confirm(t("confirmDeleteBrand"))) return;
-    try {
-      await fetch(`/api/brands/${id}`, { method: "DELETE" });
-      fetchBrands();
-    } catch {
-      // silent
-    }
-  };
-
-  // ── Unit handlers ──
-
-  const openUnitDialog = (unit?: UnitItem) => {
-    if (unit) {
-      setEditingUnit(unit);
-      setUnitForm({ name: unit.name, nameEn: unit.nameEn || "", symbol: unit.symbol || "" });
-    } else {
-      setEditingUnit(null);
-      setUnitForm({ name: "", nameEn: "", symbol: "" });
-    }
-    setUnitMsg(null);
-    setShowUnitDialog(true);
-  };
-
-  const handleSaveUnit = async () => {
-    setUnitSaving(true);
-    setUnitMsg(null);
-    try {
-      const url = editingUnit ? `/api/units/${editingUnit.id}` : "/api/units";
-      const method = editingUnit ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(unitForm),
-      });
-      if (res.ok) {
-        setUnitMsg({ type: "success", text: editingUnit ? t("unitSaved") : t("unitCreated") });
-        fetchUnits();
-        setTimeout(() => setShowUnitDialog(false), 800);
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setUnitMsg({ type: "error", text: err.error || t("saveFailed") });
-      }
-    } catch {
-      setUnitMsg({ type: "error", text: t("networkError") });
-    } finally {
-      setUnitSaving(false);
-    }
-  };
-
-  const handleDeleteUnit = async (id: string) => {
-    if (!confirm(t("confirmDeleteUnit"))) return;
-    try {
-      await fetch(`/api/units/${id}`, { method: "DELETE" });
-      fetchUnits();
-    } catch {
-      // silent
-    }
-  };
-
-  // ── Exchange Rate handlers ──
-
-  const handleSaveRate = async () => {
-    if (!rateForm.fromCurrency || !rateForm.rate) return;
-    setRateSaving(true);
-    setRateMsg(null);
-    try {
-      const res = await fetch("/api/exchange-rates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromCurrency: rateForm.fromCurrency,
-          toCurrency: rateForm.toCurrency || storeCurrency || "MYR",
-          rate: parseFloat(rateForm.rate),
-        }),
-      });
-      if (res.ok) {
-        setRateMsg({ type: "success", text: t("rateSaved") });
-        setRateForm({ fromCurrency: "", toCurrency: "", rate: "" });
-        fetchExchangeRates();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        setRateMsg({ type: "error", text: err.error || t("saveFailed") });
-      }
-    } catch {
-      setRateMsg({ type: "error", text: t("networkError") });
-    } finally {
-      setRateSaving(false);
-    }
-  };
-
   // ── Export handler ──
 
   const handleExport = async (type: string) => {
@@ -841,11 +578,7 @@ export default function SettingsPage() {
         <TabsList>
           <TabsTrigger value="general" className="gap-1"><Settings className="h-4 w-4" />{t("general")}</TabsTrigger>
           <TabsTrigger value="users" className="gap-1"><Users className="h-4 w-4" />{t("users")}</TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-1"><Bell className="h-4 w-4" />{t("notifications")}</TabsTrigger>
           <TabsTrigger value="categories" className="gap-1"><Tag className="h-4 w-4" />{t("categoryManagement")}</TabsTrigger>
-          <TabsTrigger value="brands" className="gap-1"><Bookmark className="h-4 w-4" />{t("brandManagement")}</TabsTrigger>
-          <TabsTrigger value="units" className="gap-1"><Ruler className="h-4 w-4" />{t("unitManagement")}</TabsTrigger>
-          <TabsTrigger value="exchangeRates" className="gap-1"><ArrowLeftRight className="h-4 w-4" />{t("exchangeRates")}</TabsTrigger>
           <TabsTrigger value="export" className="gap-1"><Download className="h-4 w-4" />{t("dataExport")}</TabsTrigger>
           <TabsTrigger value="logs" className="gap-1"><ScrollText className="h-4 w-4" />{t("systemLog")}</TabsTrigger>
         </TabsList>
@@ -1126,43 +859,6 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Notifications */}
-        <TabsContent value="notifications" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("notifications")}</CardTitle>
-              <CardDescription>{t("notificationsDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              {notificationsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-              [
-                { key: "email", labelKey: "emailNotifications", descKey: "emailNotificationsDesc" },
-                { key: "newOrder", labelKey: "newOrderAlerts", descKey: "newOrderAlertsDesc" },
-                { key: "lowStock", labelKey: "lowStockWarnings", descKey: "lowStockWarningsDesc" },
-                { key: "syncError", labelKey: "syncErrorAlerts", descKey: "syncErrorAlertsDesc" },
-                { key: "refund", labelKey: "refundRequests", descKey: "refundRequestsDesc" },
-              ].map((item) => (
-                <div key={item.key} className="flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-sm">{t(item.labelKey)}</p>
-                    <p className="text-xs text-muted-foreground">{t(item.descKey)}</p>
-                  </div>
-                  <Switch
-                    checked={notifications[item.key as keyof typeof notifications]}
-                    onCheckedChange={(checked) => saveNotification(item.key, checked)}
-                    disabled={notificationsSaving}
-                  />
-                </div>
-              ))
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
         {/* Categories */}
         <TabsContent value="categories" className="mt-6">
           <Card>
@@ -1205,184 +901,6 @@ export default function SettingsPage() {
                     {categories.length === 0 && (
                       <TableRow>
                         <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("noCategoriesFound")}</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Brands */}
-        <TabsContent value="brands" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>{t("brandManagement")}</CardTitle>
-                <CardDescription>{t("brandManagementDesc")}</CardDescription>
-              </div>
-              <Button size="sm" className="gap-1" onClick={() => openBrandDialog()}><Plus className="h-4 w-4" />{t("addBrand")}</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {brandsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("brandName")}</TableHead>
-                      <TableHead>{t("brandNameEn")}</TableHead>
-                      <TableHead>{t("categoryPosition")}</TableHead>
-                      <TableHead className="w-20">{tc("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {brands.map((brand) => (
-                      <TableRow key={brand.id}>
-                        <TableCell className="font-medium">{brand.name}</TableCell>
-                        <TableCell>{brand.nameEn || "-"}</TableCell>
-                        <TableCell>{brand.position}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openBrandDialog(brand)}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeleteBrand(brand.id)}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {brands.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("noBrandsFound")}</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Units */}
-        <TabsContent value="units" className="mt-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>{t("unitManagement")}</CardTitle>
-                <CardDescription>{t("unitManagementDesc")}</CardDescription>
-              </div>
-              <Button size="sm" className="gap-1" onClick={() => openUnitDialog()}><Plus className="h-4 w-4" />{t("addUnit")}</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-              {unitsLoading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("unitName")}</TableHead>
-                      <TableHead>{t("unitNameEn")}</TableHead>
-                      <TableHead>{t("unitSymbol")}</TableHead>
-                      <TableHead className="w-20">{tc("actions")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {units.map((unit) => (
-                      <TableRow key={unit.id}>
-                        <TableCell className="font-medium">{unit.name}</TableCell>
-                        <TableCell>{unit.nameEn || "-"}</TableCell>
-                        <TableCell>{unit.symbol || "-"}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openUnitDialog(unit)}><Edit className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeleteUnit(unit.id)}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {units.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">{t("noUnitsFound")}</TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Exchange Rates */}
-        <TabsContent value="exchangeRates" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t("exchangeRates")}</CardTitle>
-              <CardDescription>{t("exchangeRatesDesc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex gap-2 items-end">
-                <div className="space-y-1">
-                  <Label>{t("fromCurrency")}</Label>
-                  <Select value={rateForm.fromCurrency} onValueChange={(v) => setRateForm({ ...rateForm, fromCurrency: v })}>
-                    <SelectTrigger className="w-[160px]"><SelectValue placeholder={t("selectCurrency")} /></SelectTrigger>
-                    <SelectContent>
-                      {["CNY","USD","SGD","EUR","GBP","JPY","KRW","TWD","HKD","THB","IDR","PHP","VND","AUD","INR"].map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>{t("toCurrency")}</Label>
-                  <Input value={storeCurrency || "MYR"} disabled className="w-[100px]" />
-                </div>
-                <div className="space-y-1">
-                  <Label>{t("rate")}</Label>
-                  <Input
-                    type="number"
-                    step="0.0001"
-                    value={rateForm.rate}
-                    onChange={(e) => setRateForm({ ...rateForm, rate: e.target.value })}
-                    placeholder="0.6500"
-                    className="w-[140px]"
-                  />
-                </div>
-                <Button onClick={handleSaveRate} disabled={rateSaving || !rateForm.fromCurrency || !rateForm.rate} className="gap-1">
-                  {rateSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {tc("save")}
-                </Button>
-              </div>
-              {rateMsg && (
-                <p className={`text-sm ${rateMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>{rateMsg.text}</p>
-              )}
-              {ratesLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{t("fromCurrency")}</TableHead>
-                      <TableHead>{t("toCurrency")}</TableHead>
-                      <TableHead>{t("rate")}</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {exchangeRates.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="font-medium">{r.fromCurrency}</TableCell>
-                        <TableCell>{r.toCurrency}</TableCell>
-                        <TableCell>{r.rate}</TableCell>
-                      </TableRow>
-                    ))}
-                    {exchangeRates.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">{t("noRatesFound")}</TableCell>
                       </TableRow>
                     )}
                   </TableBody>
@@ -1592,81 +1110,9 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Brand Dialog */}
-      <Dialog open={showBrandDialog} onOpenChange={setShowBrandDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingBrand ? t("editBrand") : t("addBrand")}</DialogTitle>
-            <DialogDescription>{t("brandDialogDesc")}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t("brandName")}</Label>
-              <Input value={brandForm.name} onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("brandNameEn")}</Label>
-              <Input value={brandForm.nameEn} onChange={(e) => setBrandForm({ ...brandForm, nameEn: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("categoryPosition")}</Label>
-              <Input type="number" min={0} value={brandForm.position} onChange={(e) => setBrandForm({ ...brandForm, position: parseInt(e.target.value) || 0 })} />
-            </div>
-            {brandMsg && (
-              <p className={`text-sm ${brandMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                {brandMsg.text}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowBrandDialog(false)}>{tc("cancel")}</Button>
-            <Button onClick={handleSaveBrand} disabled={brandSaving || !brandForm.name}>
-              {brandSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-              {tc("save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Unit Dialog */}
-      <Dialog open={showUnitDialog} onOpenChange={setShowUnitDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingUnit ? t("editUnit") : t("addUnit")}</DialogTitle>
-            <DialogDescription>{t("unitDialogDesc")}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t("unitName")}</Label>
-              <Input value={unitForm.name} onChange={(e) => setUnitForm({ ...unitForm, name: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("unitNameEn")}</Label>
-              <Input value={unitForm.nameEn} onChange={(e) => setUnitForm({ ...unitForm, nameEn: e.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t("unitSymbol")}</Label>
-              <Input value={unitForm.symbol} onChange={(e) => setUnitForm({ ...unitForm, symbol: e.target.value })} placeholder="pcs / kg / m" />
-            </div>
-            {unitMsg && (
-              <p className={`text-sm ${unitMsg.type === "success" ? "text-green-600" : "text-red-600"}`}>
-                {unitMsg.text}
-              </p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUnitDialog(false)}>{tc("cancel")}</Button>
-            <Button onClick={handleSaveUnit} disabled={unitSaving || !unitForm.name}>
-              {unitSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-              {tc("save")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Permissions Dialog */}
       <Dialog open={showPermDialog} onOpenChange={setShowPermDialog}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 gap-0">
+        <DialogContent className="w-[96vw] max-w-[1200px] max-h-[90vh] flex flex-col p-0 gap-0">
           <div className="bg-gradient-to-r from-gold-500 to-gold-700 px-6 py-5 text-white rounded-t-lg shrink-0">
             <DialogTitle className="text-lg font-bold text-white flex items-center gap-2">
               <Shield className="h-5 w-5" />
