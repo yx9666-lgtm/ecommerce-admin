@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell,
 } from "recharts";
@@ -31,6 +32,9 @@ export default function AnalyticsPage() {
   const [dateRange, setDateRange] = useState("last30days");
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [platformPage, setPlatformPage] = useState(1);
+  const [productPage, setProductPage] = useState(1);
+  const pageSize = 20;
 
   const fetchData = useCallback(async (range: string) => {
     setLoading(true);
@@ -56,6 +60,31 @@ export default function AnalyticsPage() {
   const productRanking = data?.productRanking ?? [];
   const categoryShare = data?.categoryShare ?? [];
   const summary = data?.summary ?? { totalOrders: 0, totalRevenue: 0, avgOrderValue: 0 };
+  const platformTotalPages = Math.max(1, Math.ceil(platformComparison.length / pageSize));
+  const currentPlatformPage = Math.min(platformPage, platformTotalPages);
+  const pagedPlatformComparison = platformComparison.slice(
+    (currentPlatformPage - 1) * pageSize,
+    currentPlatformPage * pageSize
+  );
+  const productTotalPages = Math.max(1, Math.ceil(productRanking.length / pageSize));
+  const currentProductPage = Math.min(productPage, productTotalPages);
+  const pagedProductRanking = productRanking.slice(
+    (currentProductPage - 1) * pageSize,
+    currentProductPage * pageSize
+  );
+
+  useEffect(() => {
+    if (platformPage > platformTotalPages) setPlatformPage(platformTotalPages);
+  }, [platformPage, platformTotalPages]);
+
+  useEffect(() => {
+    if (productPage > productTotalPages) setProductPage(productTotalPages);
+  }, [productPage, productTotalPages]);
+
+  useEffect(() => {
+    setPlatformPage(1);
+    setProductPage(1);
+  }, [dateRange]);
 
   const formatCell = (row: PlatformRow, value: number) => {
     if (row.metric === "Revenue") return formatCurrency(value);
@@ -187,7 +216,7 @@ export default function AnalyticsPage() {
                     <TableCell colSpan={5} className="text-center text-muted-foreground">No data</TableCell>
                   </TableRow>
                 ) : (
-                  platformComparison.map((row) => (
+                  pagedPlatformComparison.map((row) => (
                     <TableRow key={row.metric}>
                       <TableCell className="text-sm">{row.metric}</TableCell>
                       <TableCell>{formatCell(row, row.shopee)}</TableCell>
@@ -199,6 +228,18 @@ export default function AnalyticsPage() {
                 )}
               </TableBody>
             </Table>
+            {!loading && platformTotalPages > 1 && (
+              <PaginationControls
+                className="mt-3"
+                page={currentPlatformPage}
+                totalPages={platformTotalPages}
+                totalItems={platformComparison.length}
+                prevLabel="Previous"
+                nextLabel="Next"
+                itemLabel="items"
+                onPageChange={setPlatformPage}
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -263,7 +304,7 @@ export default function AnalyticsPage() {
                   <TableCell colSpan={4} className="text-center text-muted-foreground">No data</TableCell>
                 </TableRow>
               ) : (
-                productRanking.map((p) => (
+                pagedProductRanking.map((p) => (
                   <TableRow key={p.rank}>
                     <TableCell>
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-sm font-bold ${p.rank <= 3 ? "bg-gold-400/15 text-gold-600 dark:text-gold-400" : "bg-muted text-muted-foreground"}`}>
@@ -277,9 +318,21 @@ export default function AnalyticsPage() {
                 ))
               )}
             </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            </Table>
+            {!loading && productTotalPages > 1 && (
+              <PaginationControls
+                className="mt-3"
+                page={currentProductPage}
+                totalPages={productTotalPages}
+                totalItems={productRanking.length}
+                prevLabel="Previous"
+                nextLabel="Next"
+                itemLabel="items"
+                onPageChange={setProductPage}
+              />
+            )}
+          </CardContent>
+        </Card>
     </div>
   );
 }

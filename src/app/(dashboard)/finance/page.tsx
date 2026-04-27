@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DateInput } from "@/components/ui/date-input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   DollarSign,
   TrendingUp,
@@ -77,6 +78,8 @@ interface FinanceRecord {
   channelName?: string;
   channelColor?: string;
   shopUsername?: string;
+  orderNoHint?: string;
+  supplierNoHint?: string;
   commission?: number;
   net?: number;
 }
@@ -253,11 +256,13 @@ export default function FinancePage() {
     allRecords.push({
       id: `purchase-${po.id}`,
       type: "purchase",
-      category: `采购单 ${po.poNumber}`,
+      category: po.supplier?.name || "采购支出",
       amount: po.totalAmountLocal || 0,
       note: po.notes,
       date: po.expectedDate || po.createdAt,
-      shopUsername: po.supplier?.supplierNo || undefined,
+      shopUsername: undefined,
+      orderNoHint: po.poNumber || undefined,
+      supplierNoHint: po.supplier?.supplierNo || undefined,
     });
   }
 
@@ -645,11 +650,23 @@ export default function FinancePage() {
                             {record.type === "order" && record.channelColor && (
                               <div className="w-3 h-3 rounded-full" style={{ backgroundColor: record.channelColor }} />
                             )}
-                            <span className="text-sm">{record.category}</span>
+                            <div className="flex flex-col items-center">
+                              <span className="text-sm">{record.category}</span>
+                              {record.supplierNoHint && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  供应商编码: {record.supplierNoHint}
+                                </span>
+                              )}
+                              {record.orderNoHint && (
+                                <span className="text-[11px] text-muted-foreground">
+                                  单号: {record.orderNoHint}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center text-sm">
-                          {record.shopUsername || "-"}
+                          <span>{record.shopUsername || "-"}</span>
                         </TableCell>
                         {/* 金额: only for order & income */}
                         <TableCell className="text-center text-sm">
@@ -701,28 +718,15 @@ export default function FinancePage() {
                   })}
                 </TableBody>
               </Table>
-              <div className="flex items-center justify-between p-4">
-                <p className="text-sm text-muted-foreground">
-                  共 {totalFilteredRecords} 条，第 {currentRecordPage}/{totalRecordPages} 页
-                </p>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentRecordPage <= 1}
-                    onClick={() => setRecordPage((p) => Math.max(1, p - 1))}
-                  >
-                    {tc("previous")}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={currentRecordPage >= totalRecordPages}
-                    onClick={() => setRecordPage((p) => Math.min(totalRecordPages, p + 1))}
-                  >
-                    {tc("next")}
-                  </Button>
-                </div>
+              <div className="p-4">
+                <PaginationControls
+                  page={currentRecordPage}
+                  totalPages={totalRecordPages}
+                  totalItems={totalFilteredRecords}
+                  prevLabel={tc("previous")}
+                  nextLabel={tc("next")}
+                  onPageChange={setRecordPage}
+                />
               </div>
             </>
           )}
@@ -753,6 +757,9 @@ export default function FinancePage() {
             <div className="space-y-2">
               <Label>支出费用 *</Label>
               <Input placeholder="输入支出费用名称" value={expCategory} onChange={(e) => setExpCategory(e.target.value)} />
+              <p className="text-xs text-muted-foreground">
+                提示：采购相关支出可在备注填写单号，方便后续核对。
+              </p>
             </div>
             <div className="space-y-2">
               <Label>{t("amount")} (MYR) *</Label>
@@ -772,10 +779,15 @@ export default function FinancePage() {
                 <SelectContent>
                   <SelectItem value={NO_SHOP_USERNAME_VALUE}>不选择</SelectItem>
                   {channelUsernameOptions.map((ch) => (
-                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
+                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>
+                      {ch.name} - {ch.shopUsername}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">
+                提示：供应商编码可在备注填写，系统会在采购支出里显示提示。
+              </p>
             </div>
             <div className="space-y-2">
               <Label>备注</Label>
@@ -885,6 +897,11 @@ export default function FinancePage() {
                 value={editRecordCategory}
                 onChange={(e) => setEditRecordCategory(e.target.value)}
               />
+              {editingRecord?.type === "expense" && (
+                <p className="text-xs text-muted-foreground">
+                  提示：采购相关支出可在备注填写单号，方便后续核对。
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>{t("amount")} (MYR) *</Label>
@@ -904,10 +921,17 @@ export default function FinancePage() {
                 <SelectContent>
                   <SelectItem value={NO_SHOP_USERNAME_VALUE}>不选择</SelectItem>
                   {channelUsernameOptions.map((ch) => (
-                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>{ch.name} - {ch.shopUsername}</SelectItem>
+                    <SelectItem key={ch.shopUsername} value={ch.shopUsername}>
+                      {ch.name} - {ch.shopUsername}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {editingRecord?.type === "expense" && (
+                <p className="text-xs text-muted-foreground">
+                  提示：供应商编码可在备注填写，系统会在采购支出里显示提示。
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>备注</Label>

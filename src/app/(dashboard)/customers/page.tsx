@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Download, Users, UserPlus, Star, Clock, TrendingUp, Eye, ShoppingCart, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { Search, Download, Users, UserPlus, Star, Clock, TrendingUp, Eye, ShoppingCart, Loader2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
 const tierConfig: Record<string, { variant: "success" | "info" | "warning" | "destructive" | "default" }> = {
@@ -222,20 +223,13 @@ export default function CustomersPage() {
 
           {/* Pagination */}
           {!loading && total > PAGE_SIZE && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <p className="text-sm text-muted-foreground">
-                {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, total)} / {total}
-              </p>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm px-2">{page} / {totalPages}</span>
-                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+            <PaginationControls
+              className="border-t px-4 py-3"
+              page={page}
+              totalPages={totalPages}
+              totalItems={total}
+              onPageChange={setPage}
+            />
           )}
         </CardContent>
       </Card>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Search, Download, Upload,
   Package, Loader2,
@@ -185,19 +186,13 @@ export default function ProductsPage() {
             </Table>
           )}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t">
-              <span className="text-sm text-muted-foreground">
-                共 {total} 条，第 {page}/{totalPages} 页
-              </span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  上一页
-                </Button>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                  下一页
-                </Button>
-              </div>
-            </div>
+            <PaginationControls
+              className="border-t px-4 py-3"
+              page={page}
+              totalPages={totalPages}
+              totalItems={total}
+              onPageChange={setPage}
+            />
           )}
         </CardContent>
       </Card>

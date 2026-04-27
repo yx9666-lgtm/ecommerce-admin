@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Dialog,
   DialogContent,
@@ -63,11 +64,6 @@ interface Supplier {
 interface Warehouse {
   id: string;
   name: string;
-}
-interface ProductLite {
-  sku: string;
-  nameZh: string;
-  nameEn: string;
 }
 interface POItem {
   productName: string;
@@ -126,10 +122,12 @@ function getCurrencySymbol(code: string) {
 export default function PurchasingPage() {
   const t = useTranslations("purchasing");
   const tc = useTranslations("common");
+  const poPageSize = 20;
+  const detailPageSize = 20;
   const [pos, setPOs] = useState<PO[]>([]);
+  const [poPage, setPoPage] = useState(1);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [productCatalog, setProductCatalog] = useState<ProductLite[]>([]);
   const [categories, setCategories] = useState<{ id: string; nameZh: string; nameEn: string }[]>([]);
   const [dbRates, setDbRates] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -142,6 +140,7 @@ export default function PurchasingPage() {
   const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
 
   const [viewPO, setViewPO] = useState<PO | null>(null);
+  const [detailPage, setDetailPage] = useState(1);
   const [defectEditing, setDefectEditing] = useState(false);
   const [defectData, setDefectData] = useState<Record<string, { qty: number | ""; note: string }>>({});
   const [savingDefect, setSavingDefect] = useState(false);
@@ -251,21 +250,23 @@ export default function PurchasingPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [poRes, supRes, whRes, catRes, rateRes, productRes] = await Promise.all([
-        fetch("/api/purchasing"),
+      const poParams = new URLSearchParams({
+        page: String(poPage),
+        pageSize: String(poPageSize),
+      });
+      const [poRes, supRes, whRes, catRes, rateRes] = await Promise.all([
+        fetch(`/api/purchasing?${poParams}`),
         fetch("/api/suppliers"),
         fetch("/api/warehouses"),
         fetch("/api/categories"),
         fetch("/api/exchange-rates"),
-        fetch("/api/products?page=1&pageSize=1000"),
       ]);
-      const [poData, supData, whData, catData, rateData, productData] = await Promise.all([
+      const [poData, supData, whData, catData, rateData] = await Promise.all([
         poRes.json(),
         supRes.json(),
         whRes.json(),
         catRes.json(),
         rateRes.json(),
-        productRes.json(),
       ]);
       const poItems = poData.items || [];
       setPOs(poItems);
@@ -278,31 +279,39 @@ export default function PurchasingPage() {
       }
       setDbRates(ratesMap);
       setWarehouses(whData.items || []);
-      setProductCatalog((productData?.items || []).map((p: any) => ({
-        sku: p.sku || "",
-        nameZh: p.nameZh || "",
-        nameEn: p.nameEn || "",
-      })));
       setPoStats({
         totalSpend: poData.stats?.totalSpend || 0,
         pendingCount: poData.stats?.pendingCount || 0,
         totalPOs: poData.total || 0,
       });
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-      const todayPrefix = `RJ${dateStr}-`;
-      const todayCount = poItems.filter((p: PO) => p.poNumber.startsWith(todayPrefix)).length;
-      setNextPoNumber(`${todayPrefix}${String(todayCount + 1).padStart(3, "0")}`);
+      setNextPoNumber(poData.nextPoNumber || "PO-00001");
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
-  }, []);
+  }, [poPage, poPageSize]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
   useAutoRefresh(loadData);
+
+  const poTotalPages = Math.max(1, Math.ceil(poStats.totalPOs / poPageSize));
+  useEffect(() => {
+    if (poPage > poTotalPages) setPoPage(poTotalPages);
+  }, [poPage, poTotalPages]);
+
+  const viewPoItems = viewPO?.items || [];
+  const detailTotalPages = Math.max(1, Math.ceil(viewPoItems.length / detailPageSize));
+  const currentDetailPage = Math.min(detailPage, detailTotalPages);
+  const pagedViewPoItems = viewPoItems.slice(
+    (currentDetailPage - 1) * detailPageSize,
+    currentDetailPage * detailPageSize
+  );
+
+  useEffect(() => {
+    if (detailPage > detailTotalPages) setDetailPage(detailTotalPages);
+  }, [detailPage, detailTotalPages]);
 
   const [nextSkuBaseSerial, setNextSkuBaseSerial] = useState(1001);
   const [nextSkuConfig, setNextSkuConfig] = useState<SkuConfig>(
@@ -330,36 +339,21 @@ export default function PurchasingPage() {
     [nextSkuConfig, nextSkuBaseSerial]
   );
 
-  const findSkuByName = useCallback((name: string) => {
-    const normalized = name.trim().toLowerCase();
-    if (!normalized) return null;
-    const matched = productCatalog.find((product) =>
-      [product.nameZh, product.nameEn]
-        .filter(Boolean)
-        .some((candidate) => candidate.trim().toLowerCase() === normalized)
-    );
-    return matched?.sku || null;
-  }, [productCatalog]);
-
   const getDraftSkuForIndex = useCallback((itemsList: POItem[], targetIndex: number) => {
     let draftOffset = 0;
     for (let index = 0; index <= targetIndex; index++) {
       const current = itemsList[index];
-      const matchedSku = findSkuByName(current?.productName || "");
-      if (matchedSku) continue;
       if (editingPoId && current?.sku) continue;
       if (index === targetIndex) return getAutoSku(draftOffset);
       draftOffset += 1;
     }
     return getAutoSku(draftOffset);
-  }, [findSkuByName, editingPoId, getAutoSku]);
+  }, [editingPoId, getAutoSku]);
 
   const resolveSkuForItem = useCallback((item: POItem, index: number, itemsList: POItem[]) => {
     if (editingPoId && item.sku) return item.sku;
-    const matchedSku = findSkuByName(item.productName);
-    if (matchedSku) return matchedSku;
     return getDraftSkuForIndex(itemsList, index);
-  }, [findSkuByName, editingPoId, getDraftSkuForIndex]);
+  }, [editingPoId, getDraftSkuForIndex]);
 
   const handleCurrencyChange = (currency: string) => {
     const rate = dbRates[currency] || 1;
@@ -541,7 +535,7 @@ export default function PurchasingPage() {
             <div className="flex justify-center py-16">
               <Loader2 className="h-6 w-6 animate-spin text-gold-700" />
             </div>
-          ) : pos.length === 0 ? (
+          ) : poStats.totalPOs === 0 ? (
             <div className="text-center py-16">
               <Receipt className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">{tc("noData")}</p>
@@ -608,7 +602,11 @@ export default function PurchasingPage() {
                               const res = await fetch(`/api/purchasing/${po.id}`);
                               if (res.ok) setViewPO(await res.json());
                               else setViewPO(po);
-                            } catch { setViewPO(po); }
+                              setDetailPage(1);
+                            } catch {
+                              setViewPO(po);
+                              setDetailPage(1);
+                            }
                           }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
@@ -624,6 +622,15 @@ export default function PurchasingPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {!loading && poStats.totalPOs > 0 && (
+            <PaginationControls
+              className="border-t px-4 py-3"
+              page={poPage}
+              totalPages={poTotalPages}
+              totalItems={poStats.totalPOs}
+              onPageChange={setPoPage}
+            />
           )}
         </CardContent>
       </Card>
@@ -1155,7 +1162,7 @@ export default function PurchasingPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(viewPO.items || []).map((item: any) => {
+                        {pagedViewPoItems.map((item: any) => {
                           const dq = defectEditing ? (Number(defectData[item.id]?.qty) || 0) : (item.defectQty || 0);
                           const refundItem = dq * (item.unitCost || 0);
                           return (
@@ -1216,6 +1223,16 @@ export default function PurchasingPage() {
                         })}
                       </TableBody>
                     </Table>
+                    {viewPoItems.length > detailPageSize && (
+                      <PaginationControls
+                        className="mt-3"
+                        page={currentDetailPage}
+                        totalPages={detailTotalPages}
+                        totalItems={viewPoItems.length}
+                        itemLabel="项"
+                        onPageChange={setDetailPage}
+                      />
+                    )}
 
                     {/* Defect Summary */}
                     {totalDefectQty > 0 && !defectEditing && (
@@ -1243,7 +1260,7 @@ export default function PurchasingPage() {
                 </div>
 
                 <div className="border-t bg-muted px-6 py-3 flex justify-end rounded-b-lg">
-                  <Button variant="outline" onClick={() => { setViewPO(null); setDefectEditing(false); }}>关闭</Button>
+                  <Button variant="outline" onClick={() => { setViewPO(null); setDefectEditing(false); setDetailPage(1); }}>关闭</Button>
                 </div>
               </>
             );

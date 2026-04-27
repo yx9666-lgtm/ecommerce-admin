@@ -29,6 +29,26 @@ const createPurchaseOrderSchema = z.object({
   items: z.array(purchaseOrderItemSchema).optional(),
 });
 
+function formatPoNumber(poPrefix: string, date: Date, sequence: number) {
+  const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(
+    date.getDate()
+  ).padStart(2, "0")}`;
+  return `${poPrefix}${dateStr}-${String(sequence).padStart(3, "0")}`;
+}
+
+async function getNextPoSequence() {
+  const rows = await prisma.$queryRaw<Array<{ max_seq: number | null }>>`
+    SELECT MAX(CAST(SPLIT_PART(po_number, '-', 2) AS INTEGER)) AS max_seq
+    FROM purchase_orders
+    WHERE SPLIT_PART(po_number, '-', 2) ~ '^[0-9]+$'
+  `;
+  return (Number(rows[0]?.max_seq) || 0) + 1;
+}
+
+function isPoNumberConflict(error: unknown) {
+  return Boolean(error && typeof error === "object" && (error as { code?: string }).code === "P2002");
+}
+
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
@@ -50,7 +70,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     ];
   }
 
-  const [orders, total, pendingCount, spendAgg] = await Promise.all([
+  const [orders, total, pendingCount, spendAgg, store] = await Promise.all([
     prisma.purchaseOrder.findMany({
       where,
       include: {
@@ -58,7 +78,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         warehouse: { select: { id: true, name: true } },
         _count: { select: { items: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { poNumber: "asc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -70,7 +90,10 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       where: { storeId },
       _sum: { totalAmountLocal: true },
     }),
+    prisma.store.findUnique({ where: { id: storeId }, select: { poPrefix: true } }),
   ]);
+  const poPrefix = store?.poPrefix || "RJ";
+  const nextPoNumber = formatPoNumber(poPrefix, new Date(), await getNextPoSequence());
 
   return NextResponse.json({
     items: orders,
@@ -81,6 +104,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       pendingCount,
       totalSpend: spendAgg._sum.totalAmountLocal || 0,
     },
+    nextPoNumber,
   });
 });
 
@@ -97,14 +121,6 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const store = await prisma.store.findUnique({ where: { id: storeId }, select: { poPrefix: true } });
   const poPrefix = store?.poPrefix || "RJ";
 
-  const now = new Date();
-  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const prefix = `${poPrefix}${dateStr}-`;
-  const todayCount = await prisma.purchaseOrder.count({
-    where: { storeId, poNumber: { startsWith: prefix } },
-  });
-  const poNumber = `${prefix}${String(todayCount + 1).padStart(3, "0")}`;
-
   const exchangeRate = body.exchangeRate || 1;
   const subtotal = (body.items || []).reduce(
     (s: number, i: any) => s + (i.quantity || 0) * (i.unitCost || 0),
@@ -113,39 +129,54 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const totalAmount = subtotal + (body.shippingCost || 0) + (body.tax || 0);
   const totalAmountLocal = exchangeRate ? totalAmount / exchangeRate : 0;
 
-  const po = await prisma.purchaseOrder.create({
-    data: {
-      storeId,
-      poNumber,
-      supplierInvoiceNo: body.supplierInvoiceNo || null,
-      supplierId: body.supplierId,
-      warehouseId: body.warehouseId || null,
-      status: body.status || "DRAFT",
-      purchaseCurrency: body.purchaseCurrency || "CNY",
-      localCurrency: body.localCurrency || "MYR",
-      exchangeRate,
-      subtotal,
-      shippingCost: body.shippingCost || 0,
-      tax: body.tax || 0,
-      totalAmount,
-      totalAmountLocal,
-      notes: body.notes,
-      expectedDate: body.expectedDate ? new Date(body.expectedDate) : null,
-      items: {
-        create: (body.items || []).map((item: any) => ({
-          productName: item.productName,
-          sku: item.sku,
-          categoryId: item.categoryId || null,
-          specs: item.specs || [],
-          images: item.images || [],
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-          totalCost: (item.quantity || 0) * (item.unitCost || 0),
-        })),
-      },
-    },
-    include: { supplier: true, items: true },
-  });
+  let po: any = null;
+  let poNumber = "";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const nextSequence = await getNextPoSequence();
+    poNumber = formatPoNumber(poPrefix, new Date(), nextSequence);
+    try {
+      po = await prisma.purchaseOrder.create({
+        data: {
+          storeId,
+          poNumber,
+          supplierInvoiceNo: body.supplierInvoiceNo || null,
+          supplierId: body.supplierId,
+          warehouseId: body.warehouseId || null,
+          status: body.status || "DRAFT",
+          purchaseCurrency: body.purchaseCurrency || "CNY",
+          localCurrency: body.localCurrency || "MYR",
+          exchangeRate,
+          subtotal,
+          shippingCost: body.shippingCost || 0,
+          tax: body.tax || 0,
+          totalAmount,
+          totalAmountLocal,
+          notes: body.notes,
+          expectedDate: body.expectedDate ? new Date(body.expectedDate) : null,
+          items: {
+            create: (body.items || []).map((item: any) => ({
+              productName: item.productName,
+              sku: item.sku,
+              categoryId: item.categoryId || null,
+              specs: item.specs || [],
+              images: item.images || [],
+              quantity: item.quantity,
+              unitCost: item.unitCost,
+              totalCost: (item.quantity || 0) * (item.unitCost || 0),
+            })),
+          },
+        },
+        include: { supplier: true, items: true },
+      });
+      break;
+    } catch (error) {
+      const canRetry = isPoNumberConflict(error) && attempt < 4;
+      if (!canRetry) throw error;
+    }
+  }
+  if (!po) {
+    return NextResponse.json({ error: "生成采购单号失败，请重试" }, { status: 500 });
+  }
 
   const warehouseId = body.warehouseId || (await prisma.warehouse.findFirst({ where: { storeId } }))?.id;
 

@@ -60,6 +60,13 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     ];
   }
 
+  const channels = await prisma.channel.findMany({
+    where: { storeId, isActive: true },
+    select: { id: true, name: true, code: true, color: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const channelIds = channels.map((c) => c.id);
+
   // Paginated products + stats + movements + warehouses in parallel
   const [products, total, actions, warehouses, lowStockRaw] = await Promise.all([
     prisma.product.findMany({
@@ -76,8 +83,9 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         variants: {
           select: {
             id: true,
+            sku: true,
             channelInventory: {
-              select: { allocated: true },
+              select: { channelId: true, allocated: true },
             },
           },
         },
@@ -99,9 +107,11 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 
   // Only aggregate for current page's SKUs and product IDs
   const skus = products.map((p) => p.sku);
+  const actionSkus = actions.map((a) => a.variantSku).filter((sku): sku is string => Boolean(sku));
+  const relevantSkus = Array.from(new Set([...skus, ...actionSkus]));
   const productIds = products.map((p) => p.id);
 
-  const [purchaseItems, channelOrderItems, poItemImages] = await Promise.all([
+  const [purchaseItems, channelOrderItems, poItemImages, channelOrderItemsBySku, channelAllocationRows] = await Promise.all([
     skus.length > 0
       ? prisma.purchaseOrderItem.findMany({
           where: {
@@ -123,7 +133,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
               { sku: { in: skus } },
             ],
           },
-          select: { productId: true, sku: true, quantity: true },
+          select: { productId: true, sku: true, quantity: true, order: { select: { channelId: true } } },
         })
       : [],
     skus.length > 0
@@ -134,6 +144,32 @@ export const GET = withTryCatch(async (req: NextRequest) => {
           },
           select: { sku: true, images: true },
           orderBy: { purchaseOrder: { createdAt: "desc" } },
+        })
+      : [],
+    relevantSkus.length > 0
+      ? prisma.orderItem.findMany({
+          where: {
+            order: {
+              storeId,
+              channelId: { not: null },
+              status: { in: ["COMPLETED", "SHIPPED", "DELIVERED", "PENDING_SHIPMENT"] },
+            },
+            sku: { in: relevantSkus },
+          },
+          select: { sku: true, quantity: true, order: { select: { channelId: true } } },
+        })
+      : [],
+    relevantSkus.length > 0 && channelIds.length > 0
+      ? prisma.channelInventory.findMany({
+          where: {
+            channelId: { in: channelIds },
+            variant: { product: { storeId }, sku: { in: relevantSkus } },
+          },
+          select: {
+            channelId: true,
+            allocated: true,
+            variant: { select: { sku: true } },
+          },
         })
       : [],
   ]);
@@ -153,9 +189,37 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   // Build sales map by both productId and SKU
   const salesByProductId: Record<string, number> = {};
   const salesBySku: Record<string, number> = {};
+  const salesByProductIdChannel: Record<string, Record<string, number>> = {};
+  const salesBySkuChannel: Record<string, Record<string, number>> = {};
   channelOrderItems.forEach((item) => {
+    const chId = item.order.channelId;
     if (item.productId) salesByProductId[item.productId] = (salesByProductId[item.productId] || 0) + item.quantity;
     if (item.sku) salesBySku[item.sku] = (salesBySku[item.sku] || 0) + item.quantity;
+    if (item.productId && chId) {
+      if (!salesByProductIdChannel[item.productId]) salesByProductIdChannel[item.productId] = {};
+      salesByProductIdChannel[item.productId][chId] = (salesByProductIdChannel[item.productId][chId] || 0) + item.quantity;
+    }
+    if (item.sku && chId) {
+      if (!salesBySkuChannel[item.sku]) salesBySkuChannel[item.sku] = {};
+      salesBySkuChannel[item.sku][chId] = (salesBySkuChannel[item.sku][chId] || 0) + item.quantity;
+    }
+  });
+
+  const salesBySkuChannelForMovements: Record<string, Record<string, number>> = {};
+  channelOrderItemsBySku.forEach((item) => {
+    const chId = item.order.channelId;
+    if (!item.sku || !chId) return;
+    if (!salesBySkuChannelForMovements[item.sku]) salesBySkuChannelForMovements[item.sku] = {};
+    salesBySkuChannelForMovements[item.sku][chId] =
+      (salesBySkuChannelForMovements[item.sku][chId] || 0) + item.quantity;
+  });
+
+  const allocatedBySkuChannel: Record<string, Record<string, number>> = {};
+  channelAllocationRows.forEach((row) => {
+    const sku = row.variant.sku;
+    if (!sku) return;
+    if (!allocatedBySkuChannel[sku]) allocatedBySkuChannel[sku] = {};
+    allocatedBySkuChannel[sku][row.channelId] = (allocatedBySkuChannel[sku][row.channelId] || 0) + row.allocated;
   });
 
   const stockItems = products.map((p) => {
@@ -168,6 +232,13 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     const stock = purchaseQty - channelAllocated;
     const channelStock = Math.max(0, channelAllocated - channelSales);
     const realStock = purchaseQty - channelSales;
+    const salesChannelMap = salesByProductIdChannel[p.id] || salesBySkuChannel[p.sku] || {};
+    const channelStockByChannel: Record<string, number> = {};
+    for (const ch of channels) {
+      const allocated = allocatedBySkuChannel[p.sku]?.[ch.id] || 0;
+      const sold = salesChannelMap[ch.id] || 0;
+      channelStockByChannel[ch.id] = Math.max(0, allocated - sold);
+    }
 
     let status = "normal";
     if (realStock <= stockThresholds.out) status = "out";
@@ -186,6 +257,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       channelAllocated,
       channelSales,
       channelStock,
+      channelStockByChannel,
       realStock,
       safetyStock: stockThresholds.low,
       status,
@@ -208,7 +280,15 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       operator: a.operator || "System",
       note: a.note || "",
       date: a.createdAt,
+      channelStockByChannel: channels.reduce<Record<string, number>>((acc, ch) => {
+        const sku = a.variantSku || "";
+        const allocated = (allocatedBySkuChannel[sku]?.[ch.id] || 0);
+        const sold = (salesBySkuChannelForMovements[sku]?.[ch.id] || 0);
+        acc[ch.id] = Math.max(0, allocated - sold);
+        return acc;
+      }, {}),
     })),
+    channels,
     warehouses: warehouses.map((w) => ({
       id: w.id,
       name: w.name,

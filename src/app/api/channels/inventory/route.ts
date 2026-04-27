@@ -86,7 +86,8 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     });
   }
 
-  // Listing mode: paginated variants
+  // Listing mode
+  const all = req.nextUrl.searchParams.get("all") === "1";
   const page = parseInt(req.nextUrl.searchParams.get("page") || "1");
   const pageSize = parseInt(req.nextUrl.searchParams.get("pageSize") || "20");
   const search = req.nextUrl.searchParams.get("search") || "";
@@ -129,13 +130,12 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         },
       },
       orderBy: { sku: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
     }),
     prisma.productVariant.count({ where: variantWhere }),
   ]);
 
-  // Only aggregate for current page's SKUs
+  // Aggregate sales/purchase metrics for the selected variant set
   const skus = variants.map((v) => v.sku).filter(Boolean);
 
   const [channelOrderItems, purchaseItems] = await Promise.all([
@@ -198,7 +198,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     };
   });
 
-  // Allocation map: only for current page's variant IDs, with storeId filtering
+  // Allocation map for the selected variant IDs
   const variantIds = variants.map((v) => v.id);
   const allocations = variantIds.length > 0
     ? await prisma.channelInventory.findMany({
@@ -233,8 +233,8 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     variants: enrichedVariants,
     allocationMap,
     total: variantTotal,
-    page,
-    pageSize,
+    page: all ? 1 : page,
+    pageSize: all ? variantTotal : pageSize,
   });
 });
 

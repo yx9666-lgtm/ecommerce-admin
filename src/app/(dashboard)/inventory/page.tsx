@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Dialog,
   DialogContent,
@@ -58,6 +59,7 @@ interface StockItem {
   channelAllocated: number;
   channelSales: number;
   channelStock: number;
+  channelStockByChannel?: Record<string, number>;
   realStock: number;
   safetyStock: number;
   status: string;
@@ -73,6 +75,7 @@ interface MovementItem {
   operator: string;
   note: string;
   date: string;
+  channelStockByChannel?: Record<string, number>;
 }
 
 interface WarehouseInfo {
@@ -134,7 +137,9 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [movements, setMovements] = useState<MovementItem[]>([]);
+  const [movementPage, setMovementPage] = useState(1);
   const [warehouses, setWarehouses] = useState<WarehouseInfo[]>([]);
+  const [stockChannels, setStockChannels] = useState<ChannelInfo[]>([]);
   const [stockPage, setStockPage] = useState(1);
   const [stockTotal, setStockTotal] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
@@ -151,9 +156,9 @@ export default function InventoryPage() {
   const [savingInventory, setSavingInventory] = useState(false);
   const [expandedChannelIds, setExpandedChannelIds] = useState<string[]>([]);
   const [channelSearch, setChannelSearch] = useState("");
-  const [channelPage, setChannelPage] = useState(1);
-  const [channelTotal, setChannelTotal] = useState(0);
+  const [channelPages, setChannelPages] = useState<Record<string, number>>({});
   const channelPageSize = 20;
+  const movementPageSize = 20;
 
   // Transfer dialog state
   const [showTransferDialog, setShowTransferDialog] = useState(false);
@@ -182,6 +187,7 @@ export default function InventoryPage() {
       setLowStockCount(data.lowStockCount || 0);
       setMovements(data.actions || []);
       setWarehouses(data.warehouses || []);
+      setStockChannels(data.channels || []);
     } catch (e) {
       console.error(e);
     }
@@ -191,10 +197,7 @@ export default function InventoryPage() {
   const fetchChannelInventory = useCallback(async () => {
     setInventoryLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: channelPage.toString(),
-        pageSize: channelPageSize.toString(),
-      });
+      const params = new URLSearchParams({ all: "1" });
       if (channelSearch) params.set("search", channelSearch);
       const res = await fetch(`/api/channels/inventory?${params}`);
       if (res.ok) {
@@ -203,7 +206,13 @@ export default function InventoryPage() {
         setInventoryChannels(chs);
         setVariants(data.variants || []);
         setAllocationMap(data.allocationMap || {});
-        setChannelTotal(data.total || 0);
+        setChannelPages((prev) => {
+          const next: Record<string, number> = {};
+          chs.forEach((ch: ChannelInfo) => {
+            next[ch.id] = prev[ch.id] || 1;
+          });
+          return next;
+        });
         setEditingAllocations({});
       }
     } catch {
@@ -211,7 +220,7 @@ export default function InventoryPage() {
     } finally {
       setInventoryLoading(false);
     }
-  }, [tc, channelPage, channelSearch]);
+  }, [tc, channelSearch]);
 
   useEffect(() => {
     loadData();
@@ -238,7 +247,7 @@ export default function InventoryPage() {
     if (activeTab === "channel") {
       fetchChannelInventory();
     }
-  }, [channelPage, channelSearch, activeTab, fetchChannelInventory]);
+  }, [channelSearch, activeTab, fetchChannelInventory]);
 
   // Channel inventory tab handlers
   const handleAllocationChange = (
@@ -357,7 +366,40 @@ export default function InventoryPage() {
     ? stockItems
     : stockItems.filter((item) => item.status === stockStatusFilter);
   const stockTotalPages = Math.ceil(stockTotal / stockPageSize);
-  const channelTotalPages = Math.ceil(channelTotal / channelPageSize);
+  const movementTotalPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
+  const currentMovementPage = Math.min(movementPage, movementTotalPages);
+  const pagedMovements = movements.slice(
+    (currentMovementPage - 1) * movementPageSize,
+    currentMovementPage * movementPageSize
+  );
+
+  useEffect(() => {
+    if (movementPage > movementTotalPages) setMovementPage(movementTotalPages);
+  }, [movementPage, movementTotalPages]);
+
+  useEffect(() => {
+    if (inventoryChannels.length === 0) return;
+    setChannelPages((prev) => {
+      const next: Record<string, number> = {};
+      let changed = false;
+      for (const ch of inventoryChannels) {
+        const channelItems = variants.filter((v) => {
+          const edited = editingAllocations[v.id]?.[ch.id];
+          const allocated = edited !== undefined
+            ? edited
+            : allocationMap[v.id]?.[ch.id]?.allocated || 0;
+          return allocated > 0;
+        });
+        const channelTotalPages = Math.max(1, Math.ceil(channelItems.length / channelPageSize));
+        const current = prev[ch.id] || 1;
+        const clamped = Math.min(current, channelTotalPages);
+        next[ch.id] = clamped;
+        if (clamped !== current || !(ch.id in prev)) changed = true;
+      }
+      if (Object.keys(prev).length !== Object.keys(next).length) changed = true;
+      return changed ? next : prev;
+    });
+  }, [inventoryChannels, variants, channelPageSize, editingAllocations, allocationMap]);
 
   return (
     <div className="space-y-6">
@@ -514,6 +556,11 @@ export default function InventoryPage() {
                         <TableHead className="min-w-[80px]">{t("currentStock")}</TableHead>
                         <TableHead className="min-w-[80px]">渠道销售</TableHead>
                         <TableHead className="min-w-[80px]">渠道库存</TableHead>
+                        {stockChannels.map((ch) => (
+                          <TableHead key={`stock-channel-${ch.id}`} className="min-w-[100px]">
+                            {ch.name}库存
+                          </TableHead>
+                        ))}
                         <TableHead className="min-w-[80px]">真实库存</TableHead>
                         <TableHead className="min-w-[60px]">{tc("status")}</TableHead>
                         <TableHead className="text-center min-w-[80px]">渠道分配</TableHead>
@@ -546,6 +593,11 @@ export default function InventoryPage() {
                           <TableCell className="text-sm">
                             {item.channelStock}
                           </TableCell>
+                          {stockChannels.map((ch) => (
+                            <TableCell key={`stock-row-${item.sku}-${ch.id}`} className="text-sm">
+                              {item.channelStockByChannel?.[ch.id] || 0}
+                            </TableCell>
+                          ))}
                           <TableCell className="text-sm">
                             {item.realStock}
                           </TableCell>
@@ -573,29 +625,13 @@ export default function InventoryPage() {
                 </div>
               )}
               {stockTotalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t">
-                  <span className="text-sm text-muted-foreground">
-                    共 {stockTotal} 条，第 {stockPage}/{stockTotalPages} 页
-                  </span>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={stockPage <= 1}
-                      onClick={() => setStockPage((p) => p - 1)}
-                    >
-                      上一页
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={stockPage >= stockTotalPages}
-                      onClick={() => setStockPage((p) => p + 1)}
-                    >
-                      下一页
-                    </Button>
-                  </div>
-                </div>
+                <PaginationControls
+                  className="border-t px-4 py-3"
+                  page={stockPage}
+                  totalPages={stockTotalPages}
+                  totalItems={stockTotal}
+                  onPageChange={setStockPage}
+                />
               )}
             </CardContent>
           </Card>
@@ -615,51 +651,73 @@ export default function InventoryPage() {
                   <p className="text-muted-foreground">暂无出入库记录</p>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>类型</TableHead>
-                      <TableHead>SKU</TableHead>
-                      <TableHead>{t("quantity")}</TableHead>
-                      <TableHead>仓库</TableHead>
-                      <TableHead>操作人</TableHead>
-                      <TableHead>日期</TableHead>
-                      <TableHead>备注</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {movements.map((mv) => {
-                      const typeInfo = typeIcons[mv.type] || typeIcons.INBOUND;
-                      const Icon = typeInfo.icon;
-                      return (
-                        <TableRow key={mv.id}>
-                          <TableCell>
-                            <div
-                              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${typeInfo.color}`}
-                            >
-                              <Icon className="h-3.5 w-3.5" />
-                              <span className="text-xs font-medium">{typeInfo.label}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {mv.sku}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {mv.quantity > 0 ? `+${mv.quantity}` : mv.quantity}
-                          </TableCell>
-                          <TableCell className="text-sm">{mv.warehouse}</TableCell>
-                          <TableCell className="text-sm">{mv.operator}</TableCell>
-                          <TableCell className="text-sm">
-                            {formatDate(mv.date)}
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            {mv.note}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>类型</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>{t("quantity")}</TableHead>
+                        <TableHead>仓库</TableHead>
+                        <TableHead>操作人</TableHead>
+                        {stockChannels.map((ch) => (
+                          <TableHead key={`mv-channel-${ch.id}`} className="min-w-[100px]">
+                            {ch.name}库存
+                          </TableHead>
+                        ))}
+                        <TableHead>日期</TableHead>
+                        <TableHead>备注</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {pagedMovements.map((mv) => {
+                        const typeInfo = typeIcons[mv.type] || typeIcons.INBOUND;
+                        const Icon = typeInfo.icon;
+                        return (
+                          <TableRow key={mv.id}>
+                            <TableCell>
+                              <div
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${typeInfo.color}`}
+                              >
+                                <Icon className="h-3.5 w-3.5" />
+                                <span className="text-xs font-medium">{typeInfo.label}</span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-mono text-sm">
+                              {mv.sku}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {mv.quantity > 0 ? `+${mv.quantity}` : mv.quantity}
+                            </TableCell>
+                            <TableCell className="text-sm">{mv.warehouse}</TableCell>
+                            <TableCell className="text-sm">{mv.operator}</TableCell>
+                            {stockChannels.map((ch) => (
+                              <TableCell key={`mv-row-${mv.id}-${ch.id}`} className="text-sm">
+                                {mv.channelStockByChannel?.[ch.id] || 0}
+                              </TableCell>
+                            ))}
+                            <TableCell className="text-sm">
+                              {formatDate(mv.date)}
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              {mv.note}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+              {movements.length > 0 && (
+                <PaginationControls
+                  className="border-t px-4 py-3"
+                  page={currentMovementPage}
+                  totalPages={movementTotalPages}
+                  totalItems={movements.length}
+                  itemLabel="条记录"
+                  onPageChange={setMovementPage}
+                />
               )}
             </CardContent>
           </Card>
@@ -679,7 +737,10 @@ export default function InventoryPage() {
                   <Input
                     placeholder="搜索 SKU、商品名称..."
                     value={channelSearch}
-                    onChange={(e) => { setChannelSearch(e.target.value); setChannelPage(1); }}
+                    onChange={(e) => {
+                      setChannelSearch(e.target.value);
+                      setChannelPages({});
+                    }}
                     className="pl-9"
                   />
                 </div>
@@ -718,6 +779,12 @@ export default function InventoryPage() {
                   const isExpanded = expandedChannelIds.includes(ch.id);
                   const channelVariants = variants.filter(
                     (v) => getAllocationValue(v.id, ch.id) > 0
+                  );
+                  const channelTotalPages = Math.max(1, Math.ceil(channelVariants.length / channelPageSize));
+                  const currentChannelPage = Math.min(channelPages[ch.id] || 1, channelTotalPages);
+                  const pagedChannelVariants = channelVariants.slice(
+                    (currentChannelPage - 1) * channelPageSize,
+                    currentChannelPage * channelPageSize
                   );
                   const channelTotalAllocated = variants.reduce(
                     (sum, v) => sum + getAllocationValue(v.id, ch.id),
@@ -774,76 +841,95 @@ export default function InventoryPage() {
                               </p>
                             </div>
                           ) : (
-                            <Table>
-                              <TableHeader>
-                                <TableRow>
-                                  <TableHead className="min-w-[90px]">SKU</TableHead>
-                                  <TableHead className="min-w-[60px]">商品图片</TableHead>
-                                  <TableHead className="min-w-[80px]">采购数量</TableHead>
-                                <TableHead className="min-w-[100px]">
-                                    分配数量
-                                  </TableHead>
-                                <TableHead className="min-w-[80px]">
-                                    渠道销售
-                                  </TableHead>
-                                <TableHead className="min-w-[80px]">
-                                  {tch("unallocated")}
-                                </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {channelVariants.map((v) => {
-                                  const allocated = getAllocationValue(v.id, ch.id);
-                                  const totalAllocatedAllChannels = inventoryChannels.reduce(
-                                    (sum, c) => sum + getAllocationValue(v.id, c.id),
-                                    0
-                                  );
-                                  const unallocated = v.purchaseQty - totalAllocatedAllChannels;
-                                  return (
-                                    <TableRow key={v.id}>
-                                      <TableCell className="font-mono text-sm">
-                                        {v.sku}
-                                      </TableCell>
-                                      <TableCell>
-                                        <ImageGallery
-                                          images={(v as any).allImages || (v.image ? [v.image] : [])}
-                                          alt={v.sku}
-                                        />
-                                      </TableCell>
-                                      <TableCell className="text-sm">
-                                        {v.purchaseQty}
-                                      </TableCell>
-                                      <TableCell>
-                                        <Input
-                                          type="number"
-                                          min={0}
-                                          className="w-20 mx-auto text-center h-8 text-sm"
-                                          value={allocated || ""}
-                                          onChange={(e) => {
-                                            const raw = e.target.value;
-                                            handleAllocationChange(
-                                              v.id,
-                                              ch.id,
-                                              raw === "" ? 0 : parseInt(raw) || 0
-                                            );
-                                          }}
-                                        />
-                                      </TableCell>
-                                      <TableCell className="text-sm">
-                                        {v.channelSales[ch.id] || 0}
-                                      </TableCell>
-                                      <TableCell className="text-sm">
-                                        {allocated > 0 ? (
-                                          unallocated
-                                        ) : (
-                                          ""
-                                        )}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                              </TableBody>
-                            </Table>
+                            <>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="min-w-[90px]">SKU</TableHead>
+                                    <TableHead className="min-w-[60px]">商品图片</TableHead>
+                                    <TableHead className="min-w-[80px]">采购数量</TableHead>
+                                    <TableHead className="min-w-[100px]">
+                                      分配数量
+                                    </TableHead>
+                                    <TableHead className="min-w-[80px]">
+                                      渠道销售
+                                    </TableHead>
+                                    <TableHead className="min-w-[80px]">
+                                      渠道库存
+                                    </TableHead>
+                                    <TableHead className="min-w-[80px]">
+                                      {tch("unallocated")}
+                                    </TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {pagedChannelVariants.map((v) => {
+                                    const allocated = getAllocationValue(v.id, ch.id);
+                                    const totalAllocatedAllChannels = inventoryChannels.reduce(
+                                      (sum, c) => sum + getAllocationValue(v.id, c.id),
+                                      0
+                                    );
+                                    const unallocated = v.purchaseQty - totalAllocatedAllChannels;
+                                    const channelStock = Math.max(0, allocated - (v.channelSales[ch.id] || 0));
+                                    return (
+                                      <TableRow key={v.id}>
+                                        <TableCell className="font-mono text-sm">
+                                          {v.sku}
+                                        </TableCell>
+                                        <TableCell>
+                                          <ImageGallery
+                                            images={(v as any).allImages || (v.image ? [v.image] : [])}
+                                            alt={v.sku}
+                                          />
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {v.purchaseQty}
+                                        </TableCell>
+                                        <TableCell>
+                                          <Input
+                                            type="number"
+                                            min={0}
+                                            className="w-20 mx-auto text-center h-8 text-sm"
+                                            value={allocated || ""}
+                                            onChange={(e) => {
+                                              const raw = e.target.value;
+                                              handleAllocationChange(
+                                                v.id,
+                                                ch.id,
+                                                raw === "" ? 0 : parseInt(raw) || 0
+                                              );
+                                            }}
+                                          />
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {v.channelSales[ch.id] || 0}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {channelStock}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                          {allocated > 0 ? (
+                                            unallocated
+                                          ) : (
+                                            ""
+                                          )}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
+                                </TableBody>
+                              </Table>
+                              <PaginationControls
+                                className="border-t px-4 py-3"
+                                page={currentChannelPage}
+                                totalPages={channelTotalPages}
+                                totalItems={channelVariants.length}
+                                itemLabel="个变体"
+                                onPageChange={(page) =>
+                                  setChannelPages((prev) => ({ ...prev, [ch.id]: page }))
+                                }
+                              />
+                            </>
                           )}
                         </div>
                       )}
@@ -851,31 +937,6 @@ export default function InventoryPage() {
                   );
                 });
               })()
-            )}
-            {channelTotalPages > 1 && (
-              <div className="flex items-center justify-between mt-3">
-                <span className="text-sm text-muted-foreground">
-                  共 {channelTotal} 个变体，第 {channelPage}/{channelTotalPages} 页
-                </span>
-                <div className="flex gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={channelPage <= 1}
-                    onClick={() => setChannelPage((p) => p - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={channelPage >= channelTotalPages}
-                    onClick={() => setChannelPage((p) => p + 1)}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              </div>
             )}
           </div>
         </TabsContent>

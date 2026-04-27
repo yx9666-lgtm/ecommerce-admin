@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { DateInput } from "@/components/ui/date-input";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Plus,
   Calendar,
@@ -214,6 +215,13 @@ export default function MarketingPage() {
       platform: p.platform || "All",
       color: p.platform ? (platformColors[p.platform] || "bg-gray-500") : "bg-gold-600",
     }));
+  const totalPages = Math.max(1, Math.ceil(promotions.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pagedPromotions = promotions.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   if (loading) {
     return (
@@ -275,7 +283,7 @@ export default function MarketingPage() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    promotions.map((promo) => {
+                    pagedPromotions.map((promo) => {
                       const typeInfo = typeIcons[promo.type] || typeIcons["Discount"];
                       const Icon = typeInfo.icon;
                       const budgetVal = promo.budget ?? 0;
@@ -318,15 +326,13 @@ export default function MarketingPage() {
             </CardContent>
           </Card>
           {promotions.length > pageSize && (
-            <div className="flex items-center justify-between mt-3">
-              <span className="text-sm text-muted-foreground">
-                共 {promotions.length} 条
-              </span>
-              <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>上一页</Button>
-                <Button variant="outline" size="sm" disabled={page * pageSize >= promotions.length} onClick={() => setPage(p => p + 1)}>下一页</Button>
-              </div>
-            </div>
+            <PaginationControls
+              className="mt-3"
+              page={currentPage}
+              totalPages={totalPages}
+              totalItems={promotions.length}
+              onPageChange={setPage}
+            />
           )}
         </TabsContent>
 

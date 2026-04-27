@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { PasswordConfirmDialog } from "@/components/password-confirm";
 import { Plus, Container, Search, Loader2, Star, MapPin, Edit, Trash2, Package } from "lucide-react";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
@@ -31,8 +32,12 @@ export default function WarehousesPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [defaultWarehouseName, setDefaultWarehouseName] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
+  const pageSize = 20;
 
   const [pwAction, setPwAction] = useState<"edit" | "delete">("delete");
   const [pwOpen, setPwOpen] = useState(false);
@@ -43,13 +48,17 @@ export default function WarehousesPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("pageSize", String(pageSize));
       if (search) params.set("search", search);
       const res = await fetch(`/api/warehouses?${params}`);
       const data = await res.json();
       setWarehouses(data.items || []);
+      setTotal(data.total || 0);
+      setDefaultWarehouseName(data.defaultWarehouseName || null);
     } catch (e) { console.error(e); }
     setLoading(false);
-  }, [search]);
+  }, [search, page]);
 
   useEffect(() => { loadData(); }, [loadData]);
   useAutoRefresh(loadData);
@@ -106,17 +115,21 @@ export default function WarehousesPage() {
     setSaving(false);
   };
 
-  const defaultWarehouse = warehouses.find((w) => w.isDefault);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2">
         <Card><CardContent className="p-5 flex items-center justify-between">
-          <div><p className="text-sm text-muted-foreground">{t("totalWarehouses")}</p><p className="text-2xl font-bold mt-1">{warehouses.length}</p></div>
+          <div><p className="text-sm text-muted-foreground">{t("totalWarehouses")}</p><p className="text-2xl font-bold mt-1">{total}</p></div>
           <div className="bg-gold-50 dark:bg-gold-400/15 p-3 rounded-xl"><Container className="h-6 w-6 text-gold-700" /></div>
         </CardContent></Card>
         <Card><CardContent className="p-5 flex items-center justify-between">
-          <div><p className="text-sm text-muted-foreground">{t("defaultWarehouse")}</p><p className="text-2xl font-bold mt-1">{defaultWarehouse?.name || "-"}</p></div>
+          <div><p className="text-sm text-muted-foreground">{t("defaultWarehouse")}</p><p className="text-2xl font-bold mt-1">{defaultWarehouseName || "-"}</p></div>
           <div className="bg-emerald-50 dark:bg-emerald-500/15 p-3 rounded-xl"><Star className="h-6 w-6 text-emerald-600" /></div>
         </CardContent></Card>
       </div>
@@ -124,7 +137,7 @@ export default function WarehousesPage() {
       <div className="flex justify-between items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder={tc("search") + "..."} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder={tc("search") + "..."} value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
         </div>
         <Button size="sm" className="gap-1.5" onClick={openAdd}>
           <Plus className="h-4 w-4" />{t("addWarehouse")}
@@ -135,7 +148,7 @@ export default function WarehousesPage() {
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-gold-700" /></div>
-          ) : warehouses.length === 0 ? (
+          ) : total === 0 ? (
             <div className="text-center py-16">
               <Container className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-muted-foreground">{tc("noData")}</p>
@@ -182,6 +195,15 @@ export default function WarehousesPage() {
                 ))}
               </TableBody>
             </Table>
+          )}
+          {!loading && total > 0 && (
+            <PaginationControls
+              className="border-t px-4 py-3"
+              page={page}
+              totalPages={totalPages}
+              totalItems={total}
+              onPageChange={setPage}
+            />
           )}
         </CardContent>
       </Card>

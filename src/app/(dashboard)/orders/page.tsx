@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import {
   Dialog,
   DialogContent,
@@ -310,7 +311,7 @@ export default function OrdersPage() {
     {} as Record<string, number>
   );
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const activeChannels = channels.filter((ch) => ch.isActive);
   const editSelectableChannels = editChannelId
     ? channels.filter((ch) => ch.isActive || ch.id === editChannelId)
@@ -727,53 +728,19 @@ export default function OrdersPage() {
               </TableBody>
             </Table>
           )}
+          {!loading && total > 0 && (
+            <PaginationControls
+              className="border-t px-4 py-3"
+              page={page}
+              totalPages={totalPages}
+              totalItems={total}
+              prevLabel={tc("previous")}
+              nextLabel={tc("next")}
+              onPageChange={setPage}
+            />
+          )}
         </CardContent>
       </Card>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {tc("showing")} {orders.length} {tc("of")} {total} {tc("items")}
-        </p>
-        <div className="flex gap-1">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1}
-            onClick={() => setPage(page - 1)}
-          >
-            {tc("previous")}
-          </Button>
-          {(() => {
-            const start = Math.max(1, page - 2);
-            const end = Math.min(totalPages, start + 4);
-            const adjustedStart = Math.max(1, end - 4);
-            return Array.from({ length: end - adjustedStart + 1 }, (_, i) => adjustedStart + i);
-          })().map(
-            (p) => (
-              <Button
-                key={p}
-                variant="outline"
-                size="sm"
-                className={
-                  p === page ? "bg-primary text-primary-foreground" : ""
-                }
-                onClick={() => setPage(p)}
-              >
-                {p}
-              </Button>
-            )
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages}
-            onClick={() => setPage(page + 1)}
-          >
-            {tc("next")}
-          </Button>
-        </div>
-      </div>
 
       {/* Order Detail Dialog */}
       <Dialog

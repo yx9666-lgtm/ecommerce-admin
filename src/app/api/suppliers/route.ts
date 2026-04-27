@@ -36,7 +36,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     ];
   }
 
-  const [suppliers, total] = await Promise.all([
+  const [suppliers, total, activeTotal] = await Promise.all([
     prisma.supplier.findMany({
       where,
       orderBy: { supplierNo: "asc" },
@@ -44,9 +44,10 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       take: pageSize,
     }),
     prisma.supplier.count({ where }),
+    prisma.supplier.count({ where: { ...where, isActive: true } }),
   ]);
 
-  return NextResponse.json({ items: suppliers, total, page, pageSize });
+  return NextResponse.json({ items: suppliers, total, activeTotal, page, pageSize });
 });
 
 async function generateSupplierNo(storeId: string): Promise<string> {

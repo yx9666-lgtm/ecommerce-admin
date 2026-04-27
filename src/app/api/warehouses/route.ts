@@ -18,6 +18,11 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const { storeId } = ctx;
 
   const { searchParams } = new URL(req.url);
+  const pageParam = searchParams.get("page");
+  const pageSizeParam = searchParams.get("pageSize");
+  const page = Math.max(1, parseInt(pageParam || "1", 10) || 1);
+  const pageSize = Math.max(1, parseInt(pageSizeParam || "20", 10) || 20);
+  const usePagination = Boolean(pageParam || pageSizeParam);
   const search = searchParams.get("search") || "";
 
   const where: any = { storeId };
@@ -28,16 +33,32 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     ];
   }
 
-  const [warehouses, total] = await Promise.all([
-    prisma.warehouse.findMany({
-      where,
-      include: { _count: { select: { inventory: true } } },
-      orderBy: { name: "asc" },
-    }),
+  const warehouseQuery: any = {
+    where,
+    include: { _count: { select: { inventory: true } } },
+    orderBy: { name: "asc" },
+  };
+  if (usePagination) {
+    warehouseQuery.skip = (page - 1) * pageSize;
+    warehouseQuery.take = pageSize;
+  }
+
+  const [warehouses, total, defaultWarehouse] = await Promise.all([
+    prisma.warehouse.findMany(warehouseQuery),
     prisma.warehouse.count({ where }),
+    prisma.warehouse.findFirst({
+      where: { storeId, isDefault: true },
+      select: { name: true },
+    }),
   ]);
 
-  return NextResponse.json({ items: warehouses, total });
+  return NextResponse.json({
+    items: warehouses,
+    total,
+    page: usePagination ? page : 1,
+    pageSize: usePagination ? pageSize : warehouses.length,
+    defaultWarehouseName: defaultWarehouse?.name || null,
+  });
 });
 
 export const POST = withTryCatch(async (req: NextRequest) => {

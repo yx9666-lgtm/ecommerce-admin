@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { useAuthStore } from "@/stores/auth-store";
 import { PERMISSION_GROUPS, ALL_PERMISSION_KEYS, expandPermissionMap } from "@/lib/permissions";
 import { buildSkuFromSerial, normalizeSkuConfig, type SkuConfig } from "@/lib/sku-config";
@@ -109,6 +110,8 @@ export default function SettingsPage() {
   // ── Users state ──
   const [users, setUsers] = useState<UserItem[]>([]);
   const [usersLoading, setUsersLoading] = useState(true);
+  const [usersPage, setUsersPage] = useState(1);
+  const usersPageSize = 20;
 
   // ── Store state ──
   const [storeInfo, setStoreInfo] = useState<StoreInfo | null>(null);
@@ -131,10 +134,15 @@ export default function SettingsPage() {
   // ── Logs state ──
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [logsLoading, setLogsLoading] = useState(true);
+  const [logsPage, setLogsPage] = useState(1);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const logsPageSize = 20;
 
   // ── Categories state ──
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [categoriesPage, setCategoriesPage] = useState(1);
+  const categoriesPageSize = 20;
   const [showCategoryDialog, setShowCategoryDialog] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryItem | null>(null);
   const [categoryForm, setCategoryForm] = useState({ nameZh: "", nameEn: "", position: 0 });
@@ -222,14 +230,22 @@ export default function SettingsPage() {
   const fetchLogs = useCallback(async () => {
     setLogsLoading(true);
     try {
-      const res = await fetch("/api/settings/logs");
-      if (res.ok) setLogs(await res.json());
+      const params = new URLSearchParams({
+        page: String(logsPage),
+        pageSize: String(logsPageSize),
+      });
+      const res = await fetch(`/api/settings/logs?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.items || []);
+        setLogsTotal(data.total || 0);
+      }
     } catch {
       // silent
     } finally {
       setLogsLoading(false);
     }
-  }, []);
+  }, [logsPage, logsPageSize]);
 
   const fetchCategories = useCallback(async () => {
     setCategoriesLoading(true);
@@ -246,9 +262,12 @@ export default function SettingsPage() {
   useEffect(() => {
     fetchUsers();
     fetchStore();
-    fetchLogs();
     fetchCategories();
-  }, [fetchUsers, fetchStore, fetchLogs, fetchCategories]);
+  }, [fetchUsers, fetchStore, fetchCategories]);
+
+  useEffect(() => {
+    fetchLogs();
+  }, [fetchLogs]);
 
   useEffect(() => {
     const count = Math.max(1, Math.min(5, parseInt(skuPartCount, 10) || 2));
@@ -539,6 +558,32 @@ export default function SettingsPage() {
     }
   };
 
+  const usersTotalPages = Math.max(1, Math.ceil(users.length / usersPageSize));
+  const currentUsersPage = Math.min(usersPage, usersTotalPages);
+  const pagedUsers = users.slice((currentUsersPage - 1) * usersPageSize, currentUsersPage * usersPageSize);
+
+  const categoriesTotalPages = Math.max(1, Math.ceil(categories.length / categoriesPageSize));
+  const currentCategoriesPage = Math.min(categoriesPage, categoriesTotalPages);
+  const pagedCategories = categories.slice(
+    (currentCategoriesPage - 1) * categoriesPageSize,
+    currentCategoriesPage * categoriesPageSize
+  );
+
+  const logsTotalPages = Math.max(1, Math.ceil(logsTotal / logsPageSize));
+  const currentLogsPage = Math.min(logsPage, logsTotalPages);
+
+  useEffect(() => {
+    if (usersPage > usersTotalPages) setUsersPage(usersTotalPages);
+  }, [usersPage, usersTotalPages]);
+
+  useEffect(() => {
+    if (categoriesPage > categoriesTotalPages) setCategoriesPage(categoriesTotalPages);
+  }, [categoriesPage, categoriesTotalPages]);
+
+  useEffect(() => {
+    if (logsPage > logsTotalPages) setLogsPage(logsTotalPages);
+  }, [logsPage, logsTotalPages]);
+
   // ── Helpers ──
 
   const formatDate = (iso: string | null) => {
@@ -818,7 +863,7 @@ export default function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users.map((user) => (
+                    {pagedUsers.map((user) => (
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center justify-center gap-2">
@@ -855,6 +900,15 @@ export default function SettingsPage() {
                   </TableBody>
                 </Table>
               )}
+              {!usersLoading && users.length > 0 && (
+                <PaginationControls
+                  className="border-t px-4 py-3"
+                  page={currentUsersPage}
+                  totalPages={usersTotalPages}
+                  totalItems={users.length}
+                  onPageChange={setUsersPage}
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -885,7 +939,7 @@ export default function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {categories.map((cat) => (
+                    {pagedCategories.map((cat) => (
                       <TableRow key={cat.id}>
                         <TableCell className="font-medium">{cat.nameZh}</TableCell>
                         <TableCell>{cat.nameEn || "-"}</TableCell>
@@ -905,6 +959,15 @@ export default function SettingsPage() {
                     )}
                   </TableBody>
                 </Table>
+              )}
+              {!categoriesLoading && categories.length > 0 && (
+                <PaginationControls
+                  className="border-t px-4 py-3"
+                  page={currentCategoriesPage}
+                  totalPages={categoriesTotalPages}
+                  totalItems={categories.length}
+                  onPageChange={setCategoriesPage}
+                />
               )}
             </CardContent>
           </Card>
@@ -1002,6 +1065,15 @@ export default function SettingsPage() {
                     )}
                   </TableBody>
                 </Table>
+              )}
+              {!logsLoading && logsTotal > 0 && (
+                <PaginationControls
+                  className="border-t px-4 py-3"
+                  page={currentLogsPage}
+                  totalPages={logsTotalPages}
+                  totalItems={logsTotal}
+                  onPageChange={setLogsPage}
+                />
               )}
             </CardContent>
           </Card>
