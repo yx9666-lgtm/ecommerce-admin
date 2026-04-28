@@ -636,11 +636,11 @@ export default function FinancePage() {
                         </TableCell>
                         <TableCell className="text-center">
                           {record.type === "order" ? (
-                            <Badge variant="outline" className="bg-gold-400/15 text-gold-600 dark:text-gold-400 border-0">渠道收入</Badge>
+                            <Badge variant="outline" className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">渠道收入</Badge>
                           ) : record.type === "purchase" ? (
-                            <Badge variant="outline" className="bg-orange-500/15 text-orange-600 dark:text-orange-400 border-0">采购支出</Badge>
+                            <Badge variant="outline" className="bg-red-500/15 text-red-600 dark:text-red-400 border-0">采购支出</Badge>
                           ) : record.type === "income" ? (
-                            <Badge variant="outline" className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-0">收入</Badge>
+                            <Badge variant="outline" className="bg-blue-500/15 text-blue-600 dark:text-blue-400 border-0">收入</Badge>
                           ) : (
                             <Badge variant="outline" className="bg-red-500/15 text-red-600 dark:text-red-400 border-0">支出</Badge>
                           )}

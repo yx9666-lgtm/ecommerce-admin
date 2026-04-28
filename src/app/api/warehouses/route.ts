@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { getAuthContext, withTryCatch, parseBody } from "@/lib/api-utils";
 import prisma from "@/lib/db";
 import { requirePermission, PERMISSIONS } from "@/lib/permissions";
@@ -9,6 +10,27 @@ const createWarehouseSchema = z.object({
   address: z.string().optional(),
   isDefault: z.boolean().optional(),
 });
+
+async function getWarehouseInventoryCounts(storeId: string, warehouseIds: string[]) {
+  if (warehouseIds.length === 0) return new Map<string, number>();
+  const rows = await prisma.$queryRaw<Array<{ warehouseId: string; inventoryCount: number }>>(
+    Prisma.sql`
+      SELECT
+        po."warehouse_id" AS "warehouseId",
+        COUNT(DISTINCT poi."sku")::int AS "inventoryCount"
+      FROM "purchase_order_items" poi
+      INNER JOIN "purchase_orders" po ON po."id" = poi."purchase_order_id"
+      WHERE
+        po."store_id" = ${storeId}
+        AND po."status" <> 'CANCELLED'
+        AND po."warehouse_id" IN (${Prisma.join(warehouseIds)})
+        AND poi."sku" IS NOT NULL
+        AND poi."sku" <> ''
+      GROUP BY po."warehouse_id"
+    `
+  );
+  return new Map(rows.map((row) => [row.warehouseId, Number(row.inventoryCount) || 0]));
+}
 
 export const GET = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
@@ -35,7 +57,6 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 
   const warehouseQuery: any = {
     where,
-    include: { _count: { select: { inventory: true } } },
     orderBy: { name: "asc" },
   };
   if (usePagination) {
@@ -51,9 +72,17 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       select: { name: true },
     }),
   ]);
+  const inventoryCountMap = await getWarehouseInventoryCounts(
+    storeId,
+    warehouses.map((w) => w.id)
+  );
+  const warehousesWithCount = warehouses.map((warehouse) => ({
+    ...warehouse,
+    _count: { inventory: inventoryCountMap.get(warehouse.id) || 0 },
+  }));
 
   return NextResponse.json({
-    items: warehouses,
+    items: warehousesWithCount,
     total,
     page: usePagination ? page : 1,
     pageSize: usePagination ? pageSize : warehouses.length,

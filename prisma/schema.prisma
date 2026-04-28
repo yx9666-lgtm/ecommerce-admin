@@ -528,6 +528,7 @@ model PurchaseOrder {
   supplierId       String              @map("supplier_id")
   poNumber         String              @unique @map("po_number")
   supplierInvoiceNo String?            @map("supplier_invoice_no")
+  supplierInvoiceImages String[]       @default([]) @map("supplier_invoice_images")
   status           PurchaseOrderStatus @default(DRAFT)
   subtotal         Float               @default(0)
   shippingCost     Float               @default(0) @map("shipping_cost")

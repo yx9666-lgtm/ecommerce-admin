@@ -80,18 +80,37 @@ interface PO {
   status: string;
   supplier: Supplier & { supplierNo?: string };
   warehouse?: { id: string; name: string } | null;
+  warehouseId?: string | null;
   _count?: { items: number };
   supplierInvoiceNo: string | null;
+  supplierInvoiceImages?: string[];
   totalAmount: number;
   totalAmountLocal: number;
   purchaseCurrency: string;
   localCurrency: string;
   exchangeRate: number;
+  shippingCost?: number;
+  tax?: number;
+  notes?: string | null;
   createdAt: string;
   expectedDate: string | null;
   items: any[];
   refundAmount?: number;
   refundAmountLocal?: number;
+}
+
+interface POForm {
+  supplierId: string;
+  supplierInvoiceNo: string;
+  supplierInvoiceImages: string[];
+  warehouseId: string;
+  expectedDate: string;
+  notes: string;
+  purchaseCurrency: string;
+  localCurrency: string;
+  exchangeRate: number;
+  shippingCost: number;
+  tax: number;
 }
 
 const currencies = [
@@ -192,15 +211,16 @@ export default function PurchasingPage() {
       setEditingPoId(fullPO.id);
       setForm({
         supplierId: fullPO.supplier?.id || "",
-        supplierInvoiceNo: (fullPO as any).supplierInvoiceNo || "",
-        warehouseId: (fullPO as any).warehouseId || "",
+        supplierInvoiceNo: fullPO.supplierInvoiceNo || "",
+        supplierInvoiceImages: Array.isArray(fullPO.supplierInvoiceImages) ? fullPO.supplierInvoiceImages : [],
+        warehouseId: fullPO.warehouseId || "",
         expectedDate: fullPO.expectedDate ? fullPO.expectedDate.slice(0, 10) : "",
-        notes: (fullPO as any).notes || "",
+        notes: fullPO.notes || "",
         purchaseCurrency: fullPO.purchaseCurrency || "CNY",
         localCurrency: fullPO.localCurrency || "MYR",
         exchangeRate: fullPO.exchangeRate || dbRates["CNY"] || 1,
-        shippingCost: (fullPO as any).shippingCost || 0,
-        tax: (fullPO as any).tax || 0,
+        shippingCost: fullPO.shippingCost || 0,
+        tax: fullPO.tax || 0,
       });
       setItems(
         (fullPO.items || []).map((item: any) => ({
@@ -229,9 +249,10 @@ export default function PurchasingPage() {
   };
 
   const [nextPoNumber, setNextPoNumber] = useState("PO-00001");
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<POForm>({
     supplierId: "",
     supplierInvoiceNo: "",
+    supplierInvoiceImages: [],
     warehouseId: "",
     expectedDate: "",
     notes: "",
@@ -415,11 +436,12 @@ export default function PurchasingPage() {
   };
 
   const [uploadingIdx, setUploadingIdx] = useState<number | null>(null);
+  const [uploadingInvoice, setUploadingInvoice] = useState(false);
 
-  const handleImageUpload = async (index: number, files: FileList) => {
-    setUploadingIdx(index);
-    const newImages = [...items[index].images];
+  const uploadFiles = useCallback(async (files: FileList) => {
+    const urls: string[] = [];
     let uploadError = "";
+
     for (let f = 0; f < files.length; f++) {
       const formData = new FormData();
       formData.append("file", files[f]);
@@ -435,15 +457,36 @@ export default function PurchasingPage() {
           }
           break;
         }
-        if (data?.url) newImages.push(data.url);
+        if (data?.url) urls.push(data.url);
       } catch (e) {
         console.error("Upload failed:", e);
         uploadError = "网络异常，图片上传失败";
         break;
       }
     }
+
+    return { urls, uploadError };
+  }, []);
+
+  const handleImageUpload = async (index: number, files: FileList) => {
+    setUploadingIdx(index);
+    const { urls, uploadError } = await uploadFiles(files);
+    const newImages = [...items[index].images, ...urls];
     updateItem(index, "images", newImages);
     setUploadingIdx(null);
+    if (uploadError) alert(uploadError);
+  };
+
+  const handleInvoiceImageUpload = async (files: FileList) => {
+    setUploadingInvoice(true);
+    const { urls, uploadError } = await uploadFiles(files);
+    if (urls.length > 0) {
+      setForm((prev) => ({
+        ...prev,
+        supplierInvoiceImages: [...prev.supplierInvoiceImages, ...urls],
+      }));
+    }
+    setUploadingInvoice(false);
     if (uploadError) alert(uploadError);
   };
 
@@ -452,11 +495,19 @@ export default function PurchasingPage() {
     updateItem(itemIndex, "images", newImages);
   };
 
+  const removeInvoiceImage = (imgIndex: number) => {
+    setForm((prev) => ({
+      ...prev,
+      supplierInvoiceImages: prev.supplierInvoiceImages.filter((_, i) => i !== imgIndex),
+    }));
+  };
+
   const resetForm = () => {
     setEditingPoId(null);
     setForm({
       supplierId: "",
       supplierInvoiceNo: "",
+      supplierInvoiceImages: [],
       warehouseId: "",
       expectedDate: "",
       notes: "",
@@ -557,6 +608,7 @@ export default function PurchasingPage() {
                   <TableHead>采购日期</TableHead>
                   <TableHead>供应商编码</TableHead>
                   <TableHead>供应商单据号</TableHead>
+                  <TableHead>供应商单据照片</TableHead>
                   <TableHead>仓库</TableHead>
                   <TableHead className="text-center">{t("items")}</TableHead>
                   <TableHead>采购金额</TableHead>
@@ -578,6 +630,19 @@ export default function PurchasingPage() {
                       </TableCell>
                       <TableCell className="text-sm">
                         {po.supplierInvoiceNo || "-"}
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {(po.supplierInvoiceImages?.length || 0) > 0 ? (
+                          <div className="flex items-center">
+                            <ImageGallery
+                              images={po.supplierInvoiceImages || []}
+                              alt={`${po.poNumber} 单据照片`}
+                              thumbnailSize={32}
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-sm font-mono">
                         {po.warehouse?.name || "-"}
@@ -733,6 +798,62 @@ export default function PurchasingPage() {
                     value={form.notes}
                     onChange={(e) => setForm({ ...form, notes: e.target.value })}
                   />
+                </div>
+                <div className="space-y-1.5 col-span-3">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <ImagePlus className="h-3.5 w-3.5" />
+                    供应商单据照片
+                    {form.supplierInvoiceImages.length > 0 && (
+                      <span className="ml-1 bg-gold-400/15 text-gold-600 dark:text-gold-400 px-1.5 py-0.5 rounded-full text-[9px] font-bold">
+                        {form.supplierInvoiceImages.length}
+                      </span>
+                    )}
+                  </Label>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    {form.supplierInvoiceImages.map((img, imgIdx) => (
+                      <div key={`${img}-${imgIdx}`} className="relative group/img">
+                        <img
+                          src={normalizeImageUrl(img)}
+                          alt={`供应商单据 ${imgIdx + 1}`}
+                          className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeInvoiceImage(imgIdx)}
+                          className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow-md hover:bg-red-600 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <label className="w-14 h-14 rounded-lg border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 hover:bg-gold-50/50 transition-all group/add flex-shrink-0">
+                      {uploadingInvoice ? (
+                        <Loader2 className="h-4 w-4 text-gold-400 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 text-muted-foreground group-hover/add:text-gold-400 transition-colors" />
+                          <span className="text-[8px] text-muted-foreground group-hover/add:text-gold-600">上传</span>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files.length > 0) {
+                            handleInvoiceImageUpload(e.target.files);
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                    </label>
+                    {form.supplierInvoiceImages.length === 0 && (
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        JPG/PNG/WebP，支持多张
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1102,6 +1223,30 @@ export default function PurchasingPage() {
                     <div>
                       <p className="text-[11px] text-muted-foreground mb-1">本地金额</p>
                       <p className="text-sm font-bold text-emerald-600">{formatCurrency(viewPO.totalAmountLocal || viewPO.totalAmount)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">供应商单据号</p>
+                      <p className="text-sm">{viewPO.supplierInvoiceNo || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-muted-foreground mb-1">供应商单据照片</p>
+                      {(viewPO.supplierInvoiceImages?.length || 0) > 0 ? (
+                        <div className="flex gap-2 flex-wrap">
+                          {viewPO.supplierInvoiceImages!.map((image, index) => (
+                            <ImageGallery
+                              key={`${image}-${index}`}
+                              images={[image]}
+                              alt={`供应商单据 ${index + 1}`}
+                              thumbnailSize={56}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm">-</p>
+                      )}
                     </div>
                   </div>
 

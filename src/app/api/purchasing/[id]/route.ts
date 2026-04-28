@@ -18,6 +18,7 @@ const purchaseOrderItemSchema = z.object({
 const updatePurchaseOrderSchema = z.object({
   supplierId: z.string().min(1),
   supplierInvoiceNo: z.string().optional(),
+  supplierInvoiceImages: z.array(z.string()).optional(),
   warehouseId: z.string().optional(),
   purchaseCurrency: z.string().optional(),
   localCurrency: z.string().optional(),
@@ -94,6 +95,7 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
     data: {
       supplierId: body.supplierId,
       supplierInvoiceNo: body.supplierInvoiceNo || null,
+      supplierInvoiceImages: body.supplierInvoiceImages ?? undefined,
       warehouseId: body.warehouseId || null,
       purchaseCurrency: body.purchaseCurrency || "CNY",
       localCurrency: body.localCurrency || "MYR",

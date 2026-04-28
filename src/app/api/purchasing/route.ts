@@ -17,6 +17,7 @@ const purchaseOrderItemSchema = z.object({
 const createPurchaseOrderSchema = z.object({
   supplierId: z.string().min(1),
   supplierInvoiceNo: z.string().optional(),
+  supplierInvoiceImages: z.array(z.string()).optional(),
   warehouseId: z.string().optional(),
   status: z.enum(["DRAFT", "SUBMITTED", "CONFIRMED"]).optional(),
   purchaseCurrency: z.string().optional(),
@@ -140,6 +141,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
           storeId,
           poNumber,
           supplierInvoiceNo: body.supplierInvoiceNo || null,
+          supplierInvoiceImages: body.supplierInvoiceImages || [],
           supplierId: body.supplierId,
           warehouseId: body.warehouseId || null,
           status: body.status || "DRAFT",
