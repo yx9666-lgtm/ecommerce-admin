@@ -180,6 +180,7 @@ export default function InventoryPage() {
         pageSize: stockPageSize.toString(),
       });
       if (search) params.set("search", search);
+      if (stockStatusFilter !== "all") params.set("status", stockStatusFilter);
       const res = await fetch(`/api/inventory?${params}`);
       const data = await res.json();
       setStockItems(data.products || []);
@@ -192,7 +193,7 @@ export default function InventoryPage() {
       console.error(e);
     }
     setLoading(false);
-  }, [stockPage, search]);
+  }, [stockPage, search, stockStatusFilter]);
 
   const fetchChannelInventory = useCallback(async () => {
     setInventoryLoading(true);
@@ -265,19 +266,33 @@ export default function InventoryPage() {
     setSavingInventory(true);
     setError(null);
     try {
-      const promises: Promise<any>[] = [];
-      for (const [variantId, channelAllocs] of Object.entries(editingAllocations)) {
-        for (const [channelId, allocated] of Object.entries(channelAllocs)) {
-          promises.push(
-            fetch("/api/channels/inventory", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ channelId, variantId, allocated }),
-            })
+      for (const [variantId] of Object.entries(editingAllocations)) {
+        const variant = variants.find((v) => v.id === variantId);
+        if (!variant) continue;
+        const totalAllocated = inventoryChannels.reduce(
+          (sum, ch) => sum + getAllocationValue(variantId, ch.id),
+          0
+        );
+        if (totalAllocated > variant.purchaseQty) {
+          throw new Error(
+            `SKU ${variant.sku} 分配失败：渠道分配总数(${totalAllocated})不能超过采购数量(${variant.purchaseQty})`
           );
         }
       }
-      await Promise.all(promises);
+
+      for (const [variantId, channelAllocs] of Object.entries(editingAllocations)) {
+        for (const [channelId, allocated] of Object.entries(channelAllocs)) {
+          const res = await fetch("/api/channels/inventory", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ channelId, variantId, allocated }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(data?.error || tc("error"));
+          }
+        }
+      }
       setSuccessMsg(tch("inventorySaved"));
       fetchChannelInventory();
       loadData();
@@ -328,22 +343,32 @@ export default function InventoryPage() {
     setError(null);
 
     try {
-      const promises: Promise<any>[] = [];
-      for (const [channelId, allocated] of Object.entries(transferAllocations)) {
-        promises.push(
-          fetch("/api/channels/inventory", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              channelId,
-              productId: transferProduct.id,
-              variantId: transferVariantId,
-              allocated,
-            }),
-          })
+      const requestedTotal = Object.values(transferAllocations).reduce(
+        (sum, value) => sum + (value || 0),
+        0
+      );
+      if (requestedTotal > transferProduct.purchaseQty) {
+        throw new Error(
+          `分配失败：渠道分配总数(${requestedTotal})不能超过采购数量(${transferProduct.purchaseQty})`
         );
       }
-      await Promise.all(promises);
+
+      for (const [channelId, allocated] of Object.entries(transferAllocations)) {
+        const res = await fetch("/api/channels/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            channelId,
+            productId: transferProduct.id,
+            variantId: transferVariantId,
+            allocated,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(data?.error || tc("error"));
+        }
+      }
       setSuccessMsg(t("transferSuccess"));
       setShowTransferDialog(false);
       setTransferProduct(null);
@@ -359,12 +384,10 @@ export default function InventoryPage() {
     (sum, v) => sum + (v || 0),
     0
   );
-  const transferUnallocated = (transferProduct?.stock || 0) - transferTotalAllocated;
+  const transferUnallocated = (transferProduct?.purchaseQty || 0) - transferTotalAllocated;
 
   const totalStock = stockItems.reduce((s, i) => s + i.stock, 0);
-  const filteredStockItems = stockStatusFilter === "all"
-    ? stockItems
-    : stockItems.filter((item) => item.status === stockStatusFilter);
+  const filteredStockItems = stockItems;
   const stockTotalPages = Math.ceil(stockTotal / stockPageSize);
   const movementTotalPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
   const currentMovementPage = Math.min(movementPage, movementTotalPages);
@@ -991,13 +1014,13 @@ export default function InventoryPage() {
                             {ch.name.charAt(0)}
                           </div>
                           <span className="text-sm font-medium flex-1 truncate">{ch.name}</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            max={transferProduct.stock}
-                            placeholder=""
-                            className="w-20 text-center h-8 text-sm"
-                            value={val !== undefined && val !== 0 ? val : ""}
+                            <Input
+                              type="number"
+                              min={0}
+                              max={transferProduct.purchaseQty}
+                              placeholder=""
+                              className="w-20 text-center h-8 text-sm"
+                              value={val !== undefined && val !== 0 ? val : ""}
                             onChange={(e) => {
                               const raw = e.target.value;
                               handleTransferAllocationChange(
@@ -1015,12 +1038,14 @@ export default function InventoryPage() {
                     <span>{t("totalAllocated")}: <span className="font-semibold">{transferTotalAllocated}</span></span>
                     <span>
                       {tch("unallocated")}:{" "}
-                      <span className={`font-semibold ${transferUnallocated < 0 ? "text-destructive" : "text-emerald-600"}`}>
+                      <span className={`font-bold ${transferUnallocated < 0 ? "text-destructive" : "text-emerald-600"}`}>
                         {transferUnallocated}
                       </span>
                     </span>
                     {transferUnallocated < 0 && (
-                      <span className="text-xs text-destructive">{t("overAllocatedWarning")}</span>
+                      <span className="inline-flex items-center rounded-full border border-destructive/25 bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
+                        {t("overAllocatedWarning")}
+                      </span>
                     )}
                   </div>
                 </>

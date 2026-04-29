@@ -306,6 +306,52 @@ export const POST = withTryCatch(async (req: NextRequest) => {
     );
   }
 
+  const targetVariant = await prisma.productVariant.findUnique({
+    where: { id: targetVariantId },
+    select: {
+      id: true,
+      sku: true,
+      product: { select: { storeId: true } },
+    },
+  });
+  if (!targetVariant) {
+    return NextResponse.json({ error: "Variant not found" }, { status: 404 });
+  }
+
+  const variantOwnership = assertStoreOwnership(targetVariant.product.storeId, storeId);
+  if (variantOwnership) return variantOwnership;
+
+  const [existingAllocations, purchaseQtyAgg] = await Promise.all([
+    prisma.channelInventory.findMany({
+      where: { variantId: targetVariantId },
+      select: { channelId: true, allocated: true },
+    }),
+    prisma.purchaseOrderItem.aggregate({
+      where: {
+        sku: targetVariant.sku,
+        purchaseOrder: { storeId, status: { not: "CANCELLED" } },
+      },
+      _sum: { quantity: true },
+    }),
+  ]);
+
+  const existingForChannel = existingAllocations.find((row) => row.channelId === channelId)?.allocated || 0;
+  const currentTotalAllocated = existingAllocations.reduce((sum, row) => sum + row.allocated, 0);
+  const nextTotalAllocated = currentTotalAllocated - existingForChannel + allocated;
+  const maxAllocatable = purchaseQtyAgg._sum.quantity || 0;
+  const isReducingAllocation = allocated <= existingForChannel;
+
+  // Block any new over-allocation, but allow reducing existing over-allocation to recover.
+  if (nextTotalAllocated > maxAllocatable && !isReducingAllocation) {
+    return NextResponse.json(
+      {
+        error: `分配失败：SKU ${targetVariant.sku} 的渠道分配总数(${nextTotalAllocated})不能超过采购数量(${maxAllocatable})`,
+        code: "OVER_ALLOCATED",
+      },
+      { status: 400 }
+    );
+  }
+
   const result = await prisma.channelInventory.upsert({
     where: {
       channelId_variantId: { channelId, variantId: targetVariantId },

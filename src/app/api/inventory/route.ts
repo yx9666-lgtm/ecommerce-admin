@@ -50,6 +50,10 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const page = parseInt(searchParams.get("page") || "1");
   const pageSize = parseInt(searchParams.get("pageSize") || "20");
   const search = searchParams.get("search") || "";
+  const statusFilter = searchParams.get("status") || "all";
+  const validStatusFilters = new Set(["all", "normal", "low", "critical", "out"]);
+  const normalizedStatusFilter = validStatusFilters.has(statusFilter) ? statusFilter : "all";
+  const shouldFilterByStatus = normalizedStatusFilter !== "all";
 
   const productWhere: any = { storeId };
   if (search) {
@@ -67,13 +71,17 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   });
   const channelIds = channels.map((c) => c.id);
 
-  // Paginated products + stats + movements + warehouses in parallel
+  // Product page + stats + movements + warehouses in parallel
   const [products, total, actions, warehouses, lowStockRaw] = await Promise.all([
     prisma.product.findMany({
       where: productWhere,
       orderBy: { sku: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
+      ...(shouldFilterByStatus
+        ? {}
+        : {
+            skip: (page - 1) * pageSize,
+            take: pageSize,
+          }),
       include: {
         images: {
           orderBy: [{ isPrimary: "desc" }, { position: "asc" }],
@@ -91,7 +99,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         },
       },
     }),
-    prisma.product.count({ where: productWhere }),
+    shouldFilterByStatus ? Promise.resolve(0) : prisma.product.count({ where: productWhere }),
     prisma.inventoryAction.findMany({
       where: { warehouse: { storeId } },
       include: { warehouse: true },
@@ -265,9 +273,20 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     };
   });
 
+  let finalProducts = stockItems;
+  if (shouldFilterByStatus) {
+    finalProducts = stockItems.filter((item) => item.status === normalizedStatusFilter);
+  }
+
+  const finalTotal = shouldFilterByStatus ? finalProducts.length : total;
+  if (shouldFilterByStatus) {
+    const start = (page - 1) * pageSize;
+    finalProducts = finalProducts.slice(start, start + pageSize);
+  }
+
   return NextResponse.json({
-    products: stockItems,
-    total,
+    products: finalProducts,
+    total: finalTotal,
     page,
     pageSize,
     lowStockCount: lowStockRaw,

@@ -28,7 +28,7 @@ input[type="number"] {
     --muted-foreground: 20 10% 45%;
     --accent: 35 30% 93%;
     --accent-foreground: 20 20% 12%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 86% 56%;
     --destructive-foreground: 0 0% 100%;
     --border: 32 18% 88%;
     --input: 32 18% 88%;
@@ -56,7 +56,7 @@ input[type="number"] {
     --muted-foreground: 30 10% 65%;
     --accent: 20 10% 18%;
     --accent-foreground: 35 20% 95%;
-    --destructive: 0 63% 31%;
+    --destructive: 0 86% 56%;
     --destructive-foreground: 0 0% 100%;
     --border: 20 10% 20%;
     --input: 20 10% 20%;
@@ -193,5 +193,13 @@ input[type="number"] {
   }
   .dark .scrollbar-thin::-webkit-scrollbar-thumb {
     background-color: rgba(255, 255, 255, 0.15);
+  }
+
+  /* Keep red text consistent across modules */
+  .text-red-500,
+  .text-red-600,
+  .text-red-700,
+  .text-red-800 {
+    color: hsl(var(--destructive));
   }
 }
