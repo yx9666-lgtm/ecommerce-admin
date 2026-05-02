@@ -23,6 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { PasswordConfirmDialog } from "@/components/password-confirm";
+import { DateInput } from "@/components/ui/date-input";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +38,6 @@ import { ImageGallery } from "@/components/ui/image-gallery";
 import {
   Search,
   Download,
-  Truck,
   Eye,
   Edit,
   Package,
@@ -88,6 +89,7 @@ interface Order {
   buyerNote: string | null;
   sellerNote: string | null;
   shippingAddress: any;
+  orderDate?: string | null;
   paidAt: string | null;
   createdAt: string;
 }
@@ -132,6 +134,14 @@ interface NewOrderItem {
   unitPrice: string;
 }
 
+function getTodayDate() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export default function OrdersPage() {
   const t = useTranslations("orders");
   const tc = useTranslations("common");
@@ -158,6 +168,7 @@ export default function OrdersPage() {
 
   const [newChannelId, setNewChannelId] = useState("");
   const [newOrderId, setNewOrderId] = useState("");
+  const [newOrderDate, setNewOrderDate] = useState(getTodayDate());
   const [newShippingFee, setNewShippingFee] = useState("");
   const [newDiscount, setNewDiscount] = useState("");
   const [newBuyerNote, setNewBuyerNote] = useState("");
@@ -178,48 +189,12 @@ export default function OrdersPage() {
     { productId: "", sku: "", name: "", quantity: "", unitPrice: "" },
   ]);
 
-  // Batch selection state
-  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(new Set());
-  const [batchShipping, setBatchShipping] = useState(false);
-
-  const toggleSelectOrder = (id: string) => {
-    setSelectedOrderIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedOrderIds.size === orders.length) {
-      setSelectedOrderIds(new Set());
-    } else {
-      setSelectedOrderIds(new Set(orders.map((o) => o.id)));
-    }
-  };
-
-  const handleBatchShip = async () => {
-    if (selectedOrderIds.size === 0) return;
-    if (!confirm(`确定将 ${selectedOrderIds.size} 个订单标记为已发货？`)) return;
-    setBatchShipping(true);
-    try {
-      const promises = Array.from(selectedOrderIds).map((id) =>
-        fetch(`/api/orders/${id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "SHIPPED" }),
-        })
-      );
-      await Promise.all(promises);
-      setSelectedOrderIds(new Set());
-      fetchOrders();
-    } catch (err) {
-      console.error("Batch ship failed:", err);
-    } finally {
-      setBatchShipping(false);
-    }
-  };
+  const [pwAction, setPwAction] = useState<"edit" | "delete">("delete");
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwItemName, setPwItemName] = useState("");
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(
+    null
+  );
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -263,26 +238,42 @@ export default function OrdersPage() {
       return;
     }
     try {
-      const params = new URLSearchParams({
-        pageSize: "20",
-        status: "ACTIVE",
-        fields: "minimal",
-      });
-      if (searchTerm) params.set("search", searchTerm);
-      if (channelId) params.set("channelId", channelId);
-      const res = await fetch(`/api/products?${params}`);
-      if (res.ok) {
+      const pageSize = 200;
+      let page = 1;
+      let total = 0;
+      const allItems: any[] = [];
+
+      do {
+        const params = new URLSearchParams({
+          page: String(page),
+          pageSize: String(pageSize),
+          status: "ACTIVE",
+          fields: "minimal",
+        });
+        if (searchTerm) params.set("search", searchTerm);
+        params.set("channelId", channelId);
+
+        const res = await fetch(`/api/products?${params}`);
+        if (!res.ok) break;
+
         const data = await res.json();
-        setProducts(
-          (data.items || []).map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            nameZh: p.nameZh,
-            nameEn: p.nameEn,
-            sellingPrice: p.sellingPrice,
-          }))
-        );
-      }
+        const items = data.items || [];
+        total = typeof data.total === "number" ? data.total : items.length;
+        allItems.push(...items);
+
+        if (items.length < pageSize) break;
+        page += 1;
+      } while (allItems.length < total);
+
+      setProducts(
+        allItems.map((p: any) => ({
+          id: p.id,
+          sku: p.sku,
+          nameZh: p.nameZh,
+          nameEn: p.nameEn,
+          sellingPrice: p.sellingPrice,
+        }))
+      );
     } catch {
       // ignore
     }
@@ -376,6 +367,7 @@ export default function OrdersPage() {
   const resetCreateForm = () => {
     setNewChannelId("");
     setNewOrderId("");
+    setNewOrderDate(getTodayDate());
     setNewShippingFee("");
     setNewDiscount("");
     setNewBuyerNote("");
@@ -404,6 +396,7 @@ export default function OrdersPage() {
         body: JSON.stringify({
           channelId: newChannelId,
           platformOrderId: newOrderId,
+          orderDate: newOrderDate || undefined,
           shippingFee: parseFloat(newShippingFee) || 0,
           discount: parseFloat(newDiscount) || 0,
           buyerNote: newBuyerNote || undefined,
@@ -485,6 +478,29 @@ export default function OrdersPage() {
     setEditError(null);
     setEditingOrder(order);
     fetchProducts(undefined, order.channelId || undefined);
+  };
+
+  const requestEditOrder = (order: Order) => {
+    setPwAction("edit");
+    setPwItemName(order.platformOrderId);
+    setPendingAction(() => async () => {
+      openEditDialog(order);
+    });
+    setPwOpen(true);
+  };
+
+  const requestDeleteOrder = (order: Order) => {
+    setPwAction("delete");
+    setPwItemName(order.platformOrderId);
+    setPendingAction(() => async () => {
+      const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE" });
+      if (!res.ok) {
+        alert("删除失败");
+        return;
+      }
+      fetchOrders();
+    });
+    setPwOpen(true);
   };
 
   const handleEditOrder = async () => {
@@ -616,10 +632,6 @@ export default function OrdersPage() {
             <Plus className="h-4 w-4" />
             {t("createOrder")}
           </Button>
-          <Button variant="outline" size="sm" className="gap-1" onClick={handleBatchShip} disabled={selectedOrderIds.size === 0 || batchShipping}>
-            {batchShipping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-            {t("batchShip")} {selectedOrderIds.size > 0 && `(${selectedOrderIds.size})`}
-          </Button>
           <Button variant="outline" size="sm" className="gap-1">
             <Download className="h-4 w-4" />
             {tc("export")}
@@ -643,15 +655,8 @@ export default function OrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-12">
-                    <input
-                      type="checkbox"
-                      className="rounded border-muted-foreground/30"
-                      checked={orders.length > 0 && selectedOrderIds.size === orders.length}
-                      onChange={toggleSelectAll}
-                    />
-                  </TableHead>
                   <TableHead>{t("orderId")}</TableHead>
+                  <TableHead>{t("orderDate")}</TableHead>
                   <TableHead>{t("channel")}</TableHead>
                   <TableHead>渠道用户名</TableHead>
                   <TableHead className="text-center">{t("items")}</TableHead>
@@ -673,18 +678,13 @@ export default function OrdersPage() {
                       className="cursor-pointer"
                       onClick={() => setSelectedOrder(order)}
                     >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          className="rounded border-muted-foreground/30"
-                          checked={selectedOrderIds.has(order.id)}
-                          onChange={() => toggleSelectOrder(order.id)}
-                        />
-                      </TableCell>
                       <TableCell>
                         <p className="font-medium text-sm">
                           {order.platformOrderId}
                         </p>
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {formatDateTime(order.orderDate || order.createdAt)}
                       </TableCell>
                       <TableCell>{getChannelBadge(order)}</TableCell>
                       <TableCell className="text-sm">
@@ -709,15 +709,10 @@ export default function OrdersPage() {
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => setSelectedOrder(order)}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => openEditDialog(order)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-gold-600 dark:text-gold-400 hover:bg-gold-50 dark:hover:bg-gold-400/10" onClick={() => requestEditOrder(order)}>
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={async () => {
-                            if (!confirm("确定要删除此订单吗？")) return;
-                            const res = await fetch(`/api/orders/${order.id}`, { method: "DELETE" });
-                            if (!res.ok) { alert("删除失败"); return; }
-                            fetchOrders();
-                          }}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:bg-red-50" onClick={() => requestDeleteOrder(order)}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
@@ -909,7 +904,7 @@ export default function OrdersPage() {
           )}
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>{t("channelUserName")} *</Label>
                 <Select
@@ -940,6 +935,13 @@ export default function OrdersPage() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t("orderDate")}</Label>
+                <DateInput
+                  value={newOrderDate}
+                  onChange={(val) => setNewOrderDate(val)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>{t("channelOrderId")} *</Label>
@@ -1425,6 +1427,16 @@ export default function OrdersPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <PasswordConfirmDialog
+        open={pwOpen}
+        onClose={() => setPwOpen(false)}
+        onConfirm={async () => {
+          if (pendingAction) await pendingAction();
+        }}
+        action={pwAction}
+        itemName={pwItemName}
+      />
     </div>
   );
 }

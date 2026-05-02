@@ -16,6 +16,7 @@ const orderItemSchema = z.object({
 const createOrderSchema = z.object({
   channelId: z.string().min(1),
   platformOrderId: z.string().min(1),
+  orderDate: z.string().optional(),
   items: z.array(orderItemSchema).min(1),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
@@ -153,6 +154,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   const {
     channelId,
     platformOrderId,
+    orderDate,
     items,
     customerName,
     customerPhone,
@@ -181,6 +183,10 @@ export const POST = withTryCatch(async (req: NextRequest) => {
   }
 
   const platformEnum = CODE_TO_PLATFORM[channel.code] || null;
+  const parsedOrderDate = orderDate ? new Date(`${orderDate}T00:00:00`) : undefined;
+  if (parsedOrderDate && Number.isNaN(parsedOrderDate.getTime())) {
+    return NextResponse.json({ error: "Invalid orderDate" }, { status: 400 });
+  }
 
   const computedSubtotal =
     subtotal ??
@@ -210,6 +216,7 @@ export const POST = withTryCatch(async (req: NextRequest) => {
       channelId,
       platform: platformEnum as any,
       platformOrderId,
+      orderDate: parsedOrderDate,
       status: status as any,
       customerId,
       subtotal: computedSubtotal,

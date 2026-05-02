@@ -288,6 +288,7 @@ model Order {
   buyerNote       String?     @map("buyer_note")
   sellerNote      String?     @map("seller_note")
   shippingAddress Json?       @map("shipping_address")
+  orderDate       DateTime?   @map("order_date")
   paidAt          DateTime?   @map("paid_at")
   shippedAt       DateTime?   @map("shipped_at")
   deliveredAt     DateTime?   @map("delivered_at")
