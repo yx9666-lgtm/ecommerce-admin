@@ -49,7 +49,7 @@ import {
   Trash2,
   ShoppingCart,
 } from "lucide-react";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import { useAutoRefresh } from "@/lib/use-auto-refresh";
 
 interface Channel {
@@ -154,6 +154,8 @@ export default function OrdersPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [channelFilter, setChannelFilter] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -180,6 +182,7 @@ export default function OrdersPage() {
   // Edit form state
   const [editChannelId, setEditChannelId] = useState("");
   const [editOrderId, setEditOrderId] = useState("");
+  const [editOrderDate, setEditOrderDate] = useState("");
   const [editShippingFee, setEditShippingFee] = useState("");
   const [editDiscount, setEditDiscount] = useState("");
   const [editBuyerNote, setEditBuyerNote] = useState("");
@@ -206,6 +209,8 @@ export default function OrdersPage() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (channelFilter !== "all") params.set("channelId", channelFilter);
       if (search) params.set("search", search);
+      if (startDate) params.set("startDate", startDate);
+      if (endDate) params.set("endDate", endDate);
 
       const res = await fetch(`/api/orders?${params}`);
       if (res.ok) {
@@ -218,7 +223,7 @@ export default function OrdersPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, statusFilter, channelFilter, search]);
+  }, [page, pageSize, statusFilter, channelFilter, search, startDate, endDate]);
 
   const fetchChannels = useCallback(async () => {
     try {
@@ -459,6 +464,11 @@ export default function OrdersPage() {
   const openEditDialog = (order: Order) => {
     setEditChannelId(order.channelId || "");
     setEditOrderId(order.platformOrderId);
+    setEditOrderDate(
+      order.orderDate
+        ? order.orderDate.slice(0, 10)
+        : order.createdAt.slice(0, 10)
+    );
     setEditShippingFee(order.shippingFee ? String(order.shippingFee) : "");
     setEditDiscount(order.discount ? String(order.discount) : "");
     setEditBuyerNote(order.buyerNote || "");
@@ -520,6 +530,7 @@ export default function OrdersPage() {
         body: JSON.stringify({
           channelId: editChannelId || undefined,
           platformOrderId: editOrderId || undefined,
+          orderDate: editOrderDate || undefined,
           status: editOrderStatus,
           shippingFee: parseFloat(editShippingFee) || 0,
           discount: parseFloat(editDiscount) || 0,
@@ -587,8 +598,28 @@ export default function OrdersPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3 flex-1">
-          <div className="relative flex-1 max-w-sm">
+        <div className="flex flex-wrap items-center gap-3 flex-1">
+          <div className="w-[150px]">
+            <DateInput
+              value={startDate}
+              placeholder={t("startDate")}
+              onChange={(v) => {
+                setStartDate(v);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="w-[150px]">
+            <DateInput
+              value={endDate}
+              placeholder={t("endDate")}
+              onChange={(v) => {
+                setEndDate(v);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="relative flex-1 min-w-[220px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder={`${tc("search")} ${t("orderId")}...`}
@@ -597,7 +628,7 @@ export default function OrdersPage() {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="pl-9"
+              className="h-10 pl-9"
             />
           </div>
           <Select
@@ -607,7 +638,7 @@ export default function OrdersPage() {
               setPage(1);
             }}
           >
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="h-10 w-[160px]">
               <SelectValue placeholder={t("channel")} />
             </SelectTrigger>
             <SelectContent>
@@ -684,7 +715,7 @@ export default function OrdersPage() {
                         </p>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {formatDateTime(order.orderDate || order.createdAt)}
+                        {formatDate(order.orderDate || order.createdAt)}
                       </TableCell>
                       <TableCell>{getChannelBadge(order)}</TableCell>
                       <TableCell className="text-sm">
@@ -956,18 +987,8 @@ export default function OrdersPage() {
             <Separator />
 
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center mb-3">
                 <Label className="text-sm font-medium">{t("orderItems")}</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={addItem}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("addItem")}
-                </Button>
               </div>
               <div className="space-y-3">
                 {newItems.map((item, index) => (
@@ -1045,6 +1066,18 @@ export default function OrdersPage() {
                     </Button>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-end mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-gold-700 border-gold-200 hover:bg-gold-50"
+                  onClick={addItem}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("addItem")}
+                </Button>
               </div>
             </div>
 
@@ -1173,7 +1206,7 @@ export default function OrdersPage() {
           )}
 
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>{t("channelUserName")} *</Label>
                 <Select
@@ -1206,6 +1239,13 @@ export default function OrdersPage() {
                 </Select>
               </div>
               <div className="space-y-2">
+                <Label>{t("orderDate")}</Label>
+                <DateInput
+                  value={editOrderDate}
+                  onChange={(v) => setEditOrderDate(v)}
+                />
+              </div>
+              <div className="space-y-2">
                 <Label>{t("channelOrderId")} *</Label>
                 <Input
                   placeholder={t("channelOrderIdPlaceholder")}
@@ -1218,18 +1258,8 @@ export default function OrdersPage() {
             <Separator />
 
             <div>
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center mb-3">
                 <Label className="text-sm font-medium">{t("orderItems")}</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1"
-                  onClick={addEditItem}
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {t("addItem")}
-                </Button>
               </div>
               <div className="space-y-3">
                 {editItems.map((item, index) => (
@@ -1313,6 +1343,18 @@ export default function OrdersPage() {
                     </Button>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-end mt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1 text-gold-700 border-gold-200 hover:bg-gold-50"
+                  onClick={addEditItem}
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("addItem")}
+                </Button>
               </div>
             </div>
 

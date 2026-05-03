@@ -159,6 +159,8 @@
     "selectChannel": "选择渠道",
     "channelOrderId": "渠道订单号",
     "orderDate": "订单日期",
+    "startDate": "开始日期",
+    "endDate": "结束日期",
     "channelOrderIdPlaceholder": "输入渠道平台的订单号",
     "customerName": "客户姓名",
     "phone": "电话",

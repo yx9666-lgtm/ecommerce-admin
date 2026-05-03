@@ -53,6 +53,8 @@ export const GET = withTryCatch(async (req: NextRequest) => {
   const platform = searchParams.get("platform");
   const channelId = searchParams.get("channelId");
   const search = searchParams.get("search");
+  const startDate = searchParams.get("startDate");
+  const endDate = searchParams.get("endDate");
 
   const where: any = { storeId };
   if (status && status !== "all") where.status = status;
@@ -63,6 +65,25 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       { platformOrderId: { contains: search, mode: "insensitive" } },
       { customer: { name: { contains: search, mode: "insensitive" } } },
     ];
+  }
+  if (startDate || endDate) {
+    const orderDateFilter: { gte?: Date; lt?: Date } = {};
+    if (startDate) {
+      const start = new Date(`${startDate}T00:00:00.000Z`);
+      if (Number.isNaN(start.getTime())) {
+        return NextResponse.json({ error: "Invalid startDate" }, { status: 400 });
+      }
+      orderDateFilter.gte = start;
+    }
+    if (endDate) {
+      const endExclusive = new Date(`${endDate}T00:00:00.000Z`);
+      if (Number.isNaN(endExclusive.getTime())) {
+        return NextResponse.json({ error: "Invalid endDate" }, { status: 400 });
+      }
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+      orderDateFilter.lt = endExclusive;
+    }
+    where.orderDate = orderDateFilter;
   }
 
   const [orders, total] = await Promise.all([
@@ -94,7 +115,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       },
       skip: (page - 1) * pageSize,
       take: pageSize,
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ orderDate: "desc" }, { createdAt: "desc" }],
     }),
     prisma.order.count({ where }),
   ]);

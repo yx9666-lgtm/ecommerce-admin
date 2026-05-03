@@ -25,7 +25,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
 
   const channels = await prisma.channel.findMany({
     where: { storeId, isActive: true },
-    select: { id: true, name: true, code: true, color: true },
+    select: { id: true, name: true, code: true, color: true, shopUsername: true },
     orderBy: { createdAt: "asc" },
   });
 

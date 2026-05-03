@@ -109,6 +109,7 @@ interface ChannelInfo {
   name: string;
   code: string;
   color: string | null;
+  shopUsername?: string | null;
 }
 
 const statusColors: Record<string, string> = {
@@ -386,7 +387,10 @@ export default function InventoryPage() {
   );
   const transferUnallocated = (transferProduct?.purchaseQty || 0) - transferTotalAllocated;
 
-  const totalStock = stockItems.reduce((s, i) => s + i.stock, 0);
+  const totalStock = stockItems.reduce(
+    (sum, item) => sum + (Number.isFinite(item.stock) ? item.stock : 0),
+    0
+  );
   const filteredStockItems = stockItems;
   const stockTotalPages = Math.ceil(stockTotal / stockPageSize);
   const movementTotalPages = Math.max(1, Math.ceil(movements.length / movementPageSize));
@@ -462,7 +466,7 @@ export default function InventoryPage() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">{t("currentStock")}</span>
-                  <span className="font-semibold">{formatNumber(wh.items)}</span>
+                  <span className="font-semibold">{formatNumber(wh.items || 0)}</span>
                 </div>
               </div>
             </CardContent>
@@ -579,11 +583,6 @@ export default function InventoryPage() {
                         <TableHead className="min-w-[80px]">{t("currentStock")}</TableHead>
                         <TableHead className="min-w-[80px]">渠道销售</TableHead>
                         <TableHead className="min-w-[80px]">渠道库存</TableHead>
-                        {stockChannels.map((ch) => (
-                          <TableHead key={`stock-channel-${ch.id}`} className="min-w-[100px]">
-                            {ch.name}库存
-                          </TableHead>
-                        ))}
                         <TableHead className="min-w-[80px]">真实库存</TableHead>
                         <TableHead className="min-w-[60px]">{tc("status")}</TableHead>
                         <TableHead className="text-center min-w-[80px]">渠道分配</TableHead>
@@ -616,11 +615,6 @@ export default function InventoryPage() {
                           <TableCell className="text-sm">
                             {item.channelStock}
                           </TableCell>
-                          {stockChannels.map((ch) => (
-                            <TableCell key={`stock-row-${item.sku}-${ch.id}`} className="text-sm">
-                              {item.channelStockByChannel?.[ch.id] || 0}
-                            </TableCell>
-                          ))}
                           <TableCell className="text-sm">
                             {item.realStock}
                           </TableCell>
@@ -683,11 +677,6 @@ export default function InventoryPage() {
                         <TableHead>{t("quantity")}</TableHead>
                         <TableHead>仓库</TableHead>
                         <TableHead>操作人</TableHead>
-                        {stockChannels.map((ch) => (
-                          <TableHead key={`mv-channel-${ch.id}`} className="min-w-[100px]">
-                            {ch.name}库存
-                          </TableHead>
-                        ))}
                         <TableHead>日期</TableHead>
                         <TableHead>备注</TableHead>
                       </TableRow>
@@ -714,11 +703,6 @@ export default function InventoryPage() {
                             </TableCell>
                             <TableCell className="text-sm">{mv.warehouse}</TableCell>
                             <TableCell className="text-sm">{mv.operator}</TableCell>
-                            {stockChannels.map((ch) => (
-                              <TableCell key={`mv-row-${mv.id}-${ch.id}`} className="text-sm">
-                                {mv.channelStockByChannel?.[ch.id] || 0}
-                              </TableCell>
-                            ))}
                             <TableCell className="text-sm">
                               {formatDate(mv.date)}
                             </TableCell>
@@ -870,30 +854,16 @@ export default function InventoryPage() {
                                   <TableRow>
                                     <TableHead className="min-w-[90px]">SKU</TableHead>
                                     <TableHead className="min-w-[60px]">商品图片</TableHead>
-                                    <TableHead className="min-w-[80px]">采购数量</TableHead>
-                                    <TableHead className="min-w-[100px]">
-                                      分配数量
-                                    </TableHead>
-                                    <TableHead className="min-w-[80px]">
-                                      渠道销售
-                                    </TableHead>
-                                    <TableHead className="min-w-[80px]">
-                                      渠道库存
-                                    </TableHead>
-                                    <TableHead className="min-w-[80px]">
-                                      {tch("unallocated")}
-                                    </TableHead>
+                                    <TableHead className="min-w-[100px]">分配数量</TableHead>
+                                    <TableHead className="min-w-[80px]">渠道销售</TableHead>
+                                    <TableHead className="min-w-[80px]">当前库存</TableHead>
                                   </TableRow>
                                 </TableHeader>
                                 <TableBody>
                                   {pagedChannelVariants.map((v) => {
                                     const allocated = getAllocationValue(v.id, ch.id);
-                                    const totalAllocatedAllChannels = inventoryChannels.reduce(
-                                      (sum, c) => sum + getAllocationValue(v.id, c.id),
-                                      0
-                                    );
-                                    const unallocated = v.purchaseQty - totalAllocatedAllChannels;
-                                    const channelStock = Math.max(0, allocated - (v.channelSales[ch.id] || 0));
+                                    const sales = v.channelSales[ch.id] || 0;
+                                    const currentStock = allocated - sales;
                                     return (
                                       <TableRow key={v.id}>
                                         <TableCell className="font-mono text-sm">
@@ -905,37 +875,14 @@ export default function InventoryPage() {
                                             alt={v.sku}
                                           />
                                         </TableCell>
-                                        <TableCell className="text-sm">
-                                          {v.purchaseQty}
-                                        </TableCell>
-                                        <TableCell>
-                                          <Input
-                                            type="number"
-                                            min={0}
-                                            className="w-20 mx-auto text-center h-8 text-sm"
-                                            value={allocated || ""}
-                                            onChange={(e) => {
-                                              const raw = e.target.value;
-                                              handleAllocationChange(
-                                                v.id,
-                                                ch.id,
-                                                raw === "" ? 0 : parseInt(raw) || 0
-                                              );
-                                            }}
-                                          />
+                                        <TableCell className="text-sm font-medium">
+                                          {allocated || 0}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                          {v.channelSales[ch.id] || 0}
+                                          {sales}
                                         </TableCell>
-                                        <TableCell className="text-sm">
-                                          {channelStock}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                          {allocated > 0 ? (
-                                            unallocated
-                                          ) : (
-                                            ""
-                                          )}
+                                        <TableCell className="text-sm font-medium">
+                                          {currentStock}
                                         </TableCell>
                                       </TableRow>
                                     );
@@ -1013,7 +960,12 @@ export default function InventoryPage() {
                           >
                             {ch.name.charAt(0)}
                           </div>
-                          <span className="text-sm font-medium flex-1 truncate">{ch.name}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{ch.name}</p>
+                            {ch.shopUsername && (
+                              <p className="text-xs text-muted-foreground truncate">{ch.shopUsername}</p>
+                            )}
+                          </div>
                             <Input
                               type="number"
                               min={0}

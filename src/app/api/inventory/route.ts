@@ -194,22 +194,29 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     if (item.sku) purchaseMap[item.sku] = (purchaseMap[item.sku] || 0) + item.quantity;
   });
 
-  // Build sales map by both productId and SKU
-  const salesByProductId: Record<string, number> = {};
-  const salesBySku: Record<string, number> = {};
-  const salesByProductIdChannel: Record<string, Record<string, number>> = {};
-  const salesBySkuChannel: Record<string, Record<string, number>> = {};
+  // Resolve sales to a single product key:
+  // - prefer orderItem.productId when present
+  // - fallback to product ID mapped by SKU when productId is null
+  const productIdBySku: Record<string, string> = {};
+  products.forEach((p) => {
+    if (p.sku) productIdBySku[p.sku] = p.id;
+  });
+  const salesByResolvedProductId: Record<string, number> = {};
+  const salesByResolvedProductIdChannel: Record<string, Record<string, number>> = {};
   channelOrderItems.forEach((item) => {
     const chId = item.order.channelId;
-    if (item.productId) salesByProductId[item.productId] = (salesByProductId[item.productId] || 0) + item.quantity;
-    if (item.sku) salesBySku[item.sku] = (salesBySku[item.sku] || 0) + item.quantity;
-    if (item.productId && chId) {
-      if (!salesByProductIdChannel[item.productId]) salesByProductIdChannel[item.productId] = {};
-      salesByProductIdChannel[item.productId][chId] = (salesByProductIdChannel[item.productId][chId] || 0) + item.quantity;
-    }
-    if (item.sku && chId) {
-      if (!salesBySkuChannel[item.sku]) salesBySkuChannel[item.sku] = {};
-      salesBySkuChannel[item.sku][chId] = (salesBySkuChannel[item.sku][chId] || 0) + item.quantity;
+    const resolvedProductId = item.productId || (item.sku ? productIdBySku[item.sku] : undefined);
+    if (!resolvedProductId) return;
+
+    salesByResolvedProductId[resolvedProductId] =
+      (salesByResolvedProductId[resolvedProductId] || 0) + item.quantity;
+
+    if (chId) {
+      if (!salesByResolvedProductIdChannel[resolvedProductId]) {
+        salesByResolvedProductIdChannel[resolvedProductId] = {};
+      }
+      salesByResolvedProductIdChannel[resolvedProductId][chId] =
+        (salesByResolvedProductIdChannel[resolvedProductId][chId] || 0) + item.quantity;
     }
   });
 
@@ -236,11 +243,11 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       (sum, v) => sum + v.channelInventory.reduce((s, ci) => s + ci.allocated, 0),
       0
     );
-    const channelSales = salesByProductId[p.id] || salesBySku[p.sku] || 0;
+    const channelSales = salesByResolvedProductId[p.id] || 0;
     const stock = purchaseQty - channelAllocated;
     const channelStock = Math.max(0, channelAllocated - channelSales);
     const realStock = purchaseQty - channelSales;
-    const salesChannelMap = salesByProductIdChannel[p.id] || salesBySkuChannel[p.sku] || {};
+    const salesChannelMap = salesByResolvedProductIdChannel[p.id] || {};
     const channelStockByChannel: Record<string, number> = {};
     for (const ch of channels) {
       const allocated = allocatedBySkuChannel[p.sku]?.[ch.id] || 0;
@@ -278,6 +285,12 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     finalProducts = stockItems.filter((item) => item.status === normalizedStatusFilter);
   }
 
+  // Compute total current stock (purchaseQty - channelAllocated) across all products for warehouse display
+  const warehouseTotalStock = stockItems.reduce(
+    (sum, item) => sum + (Number.isFinite(item.stock) ? item.stock : 0),
+    0
+  );
+
   const finalTotal = shouldFilterByStatus ? finalProducts.length : total;
   if (shouldFilterByStatus) {
     const start = (page - 1) * pageSize;
@@ -312,6 +325,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       id: w.id,
       name: w.name,
       address: w.address || "",
+      items: warehouseTotalStock,
     })),
   });
 });

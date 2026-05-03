@@ -16,6 +16,7 @@ const updateOrderItemSchema = z.object({
 const updateOrderSchema = z.object({
   channelId: z.string().optional(),
   platformOrderId: z.string().optional(),
+  orderDate: z.string().optional(),
   status: z.enum(["PENDING_PAYMENT", "PENDING_SHIPMENT", "SHIPPED", "DELIVERED", "COMPLETED", "CANCELLED", "REFUND_PENDING", "REFUNDED"]).optional(),
   customerName: z.string().optional(),
   customerPhone: z.string().optional(),
@@ -46,6 +47,7 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
   const {
     channelId,
     platformOrderId,
+    orderDate,
     status,
     customerName,
     customerPhone,
@@ -63,6 +65,11 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
   );
   const computedTotal = computedSubtotal + (shippingFee || 0) - (discount || 0);
 
+  const parsedOrderDate = orderDate ? new Date(`${orderDate}T00:00:00`) : undefined;
+  if (parsedOrderDate && Number.isNaN(parsedOrderDate.getTime())) {
+    return NextResponse.json({ error: "Invalid orderDate" }, { status: 400 });
+  }
+
   const order = await prisma.$transaction(async (tx) => {
     // Delete old items and recreate
     await tx.orderItem.deleteMany({ where: { orderId: id } });
@@ -72,6 +79,7 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
       data: {
         channelId: channelId || undefined,
         platformOrderId: platformOrderId || undefined,
+        orderDate: parsedOrderDate,
         status: status || undefined,
         shippingFee: shippingFee ?? 0,
         discount: discount ?? 0,

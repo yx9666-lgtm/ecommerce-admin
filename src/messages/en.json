@@ -159,6 +159,8 @@
     "selectChannel": "Select Channel",
     "channelOrderId": "Channel Order ID",
     "orderDate": "Order Date",
+    "startDate": "Start Date",
+    "endDate": "End Date",
     "channelOrderIdPlaceholder": "Enter order ID from the channel",
     "customerName": "Customer Name",
     "phone": "Phone",

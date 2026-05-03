@@ -130,11 +130,16 @@ export const GET = withTryCatch(async (req: NextRequest) => {
         })
       : [];
 
-  const salesByProductId: Record<string, number> = {};
-  const salesBySku: Record<string, number> = {};
+  const productIdBySku: Record<string, string> = {};
+  products.forEach((p) => {
+    if (p.sku) productIdBySku[p.sku] = p.id;
+  });
+  const salesByResolvedProductId: Record<string, number> = {};
   orderItems.forEach((item) => {
-    if (item.productId) salesByProductId[item.productId] = (salesByProductId[item.productId] || 0) + item.quantity;
-    if (item.sku) salesBySku[item.sku] = (salesBySku[item.sku] || 0) + item.quantity;
+    const resolvedProductId = item.productId || (item.sku ? productIdBySku[item.sku] : undefined);
+    if (!resolvedProductId) return;
+    salesByResolvedProductId[resolvedProductId] =
+      (salesByResolvedProductId[resolvedProductId] || 0) + item.quantity;
   });
 
   // Build PO image fallback map by SKU
@@ -160,7 +165,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
       0
     );
     const hasInventoryRecords = p.variants.some((v) => v.inventory.length > 0);
-    const salesQty = salesByProductId[p.id] || salesBySku[p.sku] || 0;
+    const salesQty = salesByResolvedProductId[p.id] || 0;
     const baseStock = hasInventoryRecords ? inventoryRealStock : p.totalStock;
     const realStock = baseStock - salesQty;
     const { variants, ...rest } = p;
