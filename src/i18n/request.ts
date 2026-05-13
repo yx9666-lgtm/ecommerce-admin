@@ -10,7 +10,7 @@ export default getRequestConfig(async () => {
     locale = "zh";
   }
 
-  if (locale !== "zh" && locale !== "en") {
+  if (locale !== "zh" && locale !== "en" && locale !== "ms") {
     locale = "zh";
   }
 

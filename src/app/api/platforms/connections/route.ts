@@ -37,7 +37,7 @@ export const GET = withTryCatch(async (req: NextRequest) => {
     platforms.length > 0
       ? prisma.platformListing.groupBy({
           by: ["platform"],
-          where: { platform: { in: platforms } },
+          where: { platform: { in: platforms }, product: { storeId } },
           _count: { id: true },
         })
       : [],
@@ -124,6 +124,8 @@ export const POST = withTryCatch(async (req: NextRequest) => {
 export const DELETE = withTryCatch(async (req: NextRequest) => {
   const ctx = await getAuthContext();
   if (ctx instanceof NextResponse) return ctx;
+  const denied = requirePermission(ctx, PERMISSIONS.platforms.delete);
+  if (denied) return denied;
   const { storeId } = ctx;
 
   const connectionId = req.nextUrl.searchParams.get("id");

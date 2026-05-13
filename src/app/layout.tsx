@@ -4,6 +4,7 @@ import { getLocale } from "next-intl/server";
 import { SessionProvider } from "@/components/providers/session-provider";
 import zhMessages from "@/messages/zh.json";
 import enMessages from "@/messages/en.json";
+import msMessages from "@/messages/ms.json";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -11,7 +12,7 @@ export const metadata: Metadata = {
   description: "Multi-platform e-commerce management system for Malaysian marketplaces",
 };
 
-const messagesMap: Record<string, any> = { zh: zhMessages, en: enMessages };
+const messagesMap: Record<string, any> = { zh: zhMessages, en: enMessages, ms: msMessages };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let locale = "zh";

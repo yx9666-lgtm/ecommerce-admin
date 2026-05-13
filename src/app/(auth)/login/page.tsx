@@ -69,18 +69,64 @@ export default function LoginPage() {
   };
 
   const toggleLocale = () => {
-    const newLocale = locale === "zh" ? "en" : "zh";
+    const localeCycle: Array<"zh" | "en" | "ms"> = ["zh", "en", "ms"];
+    const index = localeCycle.indexOf(locale as "zh" | "en" | "ms");
+    const newLocale = localeCycle[(index + 1) % localeCycle.length];
     setLocale(newLocale);
     window.location.reload();
   };
 
-  const currentLocale = mounted ? locale : "zh";
+  const currentLocale = (mounted ? locale : "zh") as "zh" | "en" | "ms";
+
+  const localeCopy = {
+    zh: {
+      panelTitle: "统一管理您的电商帝国",
+      panelDesc: "连接 Shopee、Lazada、TikTok Shop、PG Mall，一站式管理订单、商品、库存与财务。",
+      featurePlatform: "多平台管理",
+      featureInventory: "商品库存",
+      featureAnalytics: "数据分析",
+      featureLogistics: "物流追踪",
+      platformSupport: "支持马来西亚 4 大电商平台",
+      usernamePlaceholder: "请输入用户名",
+      passwordPlaceholder: "请输入密码",
+      defaultAccount: "默认账号：admin / admin123",
+      languageButton: "中文",
+    },
+    en: {
+      panelTitle: "Manage Your E-Commerce Empire",
+      panelDesc: "Connect Shopee, Lazada, TikTok Shop, PG Mall. Manage orders, products, inventory & finance in one place.",
+      featurePlatform: "Multi-Platform",
+      featureInventory: "Inventory",
+      featureAnalytics: "Analytics",
+      featureLogistics: "Logistics",
+      platformSupport: "Supporting 4 major MY platforms",
+      usernamePlaceholder: "Enter username",
+      passwordPlaceholder: "Enter password",
+      defaultAccount: "Default: admin / admin123",
+      languageButton: "English",
+    },
+    ms: {
+      panelTitle: "Urus Empayar E-Dagang Anda",
+      panelDesc: "Sambungkan Shopee, Lazada, TikTok Shop dan PG Mall. Urus pesanan, produk, inventori dan kewangan di satu tempat.",
+      featurePlatform: "Pelbagai Platform",
+      featureInventory: "Inventori",
+      featureAnalytics: "Analitik",
+      featureLogistics: "Logistik",
+      platformSupport: "Menyokong 4 platform utama MY",
+      usernamePlaceholder: "Masukkan nama pengguna",
+      passwordPlaceholder: "Masukkan kata laluan",
+      defaultAccount: "Akaun lalai: admin / admin123",
+      languageButton: "Bahasa",
+    },
+  } as const;
+
+  const copy = localeCopy[currentLocale];
 
   const features = [
-    { icon: Store, label: currentLocale === "zh" ? "多平台管理" : "Multi-Platform" },
-    { icon: Package, label: currentLocale === "zh" ? "商品库存" : "Inventory" },
-    { icon: BarChart3, label: currentLocale === "zh" ? "数据分析" : "Analytics" },
-    { icon: Truck, label: currentLocale === "zh" ? "物流追踪" : "Logistics" },
+    { icon: Store, label: copy.featurePlatform },
+    { icon: Package, label: copy.featureInventory },
+    { icon: BarChart3, label: copy.featureAnalytics },
+    { icon: Truck, label: copy.featureLogistics },
   ];
 
   return (
@@ -104,12 +150,10 @@ export default function LoginPage() {
           </div>
 
           <h2 className="text-4xl font-bold leading-tight mb-4">
-            {currentLocale === "zh" ? "统一管理您的电商帝国" : "Manage Your E-Commerce Empire"}
+            {copy.panelTitle}
           </h2>
           <p className="text-gold-200 text-lg mb-12 max-w-md">
-            {currentLocale === "zh"
-              ? "连接 Shopee、Lazada、TikTok Shop、PG Mall，一站式管理订单、商品、库存与财务。"
-              : "Connect Shopee, Lazada, TikTok Shop, PG Mall. Manage orders, products, inventory & finance in one place."}
+            {copy.panelDesc}
           </p>
 
           <div className="grid grid-cols-2 gap-4">
@@ -141,9 +185,7 @@ export default function LoginPage() {
               ))}
             </div>
             <span className="text-gold-200 text-sm">
-              {currentLocale === "zh"
-                ? "支持马来西亚 4 大电商平台"
-                : "Supporting 4 major MY platforms"}
+              {copy.platformSupport}
             </span>
           </div>
         </div>
@@ -163,7 +205,7 @@ export default function LoginPage() {
             className="gap-2 text-muted-foreground"
           >
             <Globe className="w-4 h-4" />
-            {currentLocale === "zh" ? "English" : "中文"}
+            {copy.languageButton}
           </Button>
         </div>
 
@@ -188,10 +230,10 @@ export default function LoginPage() {
                   <Label htmlFor="username" className="text-foreground">
                     {t("auth.username")}
                   </Label>
-                  <Input
-                    id="username"
-                    placeholder={currentLocale === "zh" ? "请输入用户名" : "Enter username"}
-                    value={username}
+                    <Input
+                      id="username"
+                      placeholder={copy.usernamePlaceholder}
+                      value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
                     autoComplete="username"
@@ -207,7 +249,7 @@ export default function LoginPage() {
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
-                      placeholder={currentLocale === "zh" ? "请输入密码" : "Enter password"}
+                      placeholder={copy.passwordPlaceholder}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
@@ -252,9 +294,7 @@ export default function LoginPage() {
 
               <div className="text-center">
                 <p className="text-xs text-muted-foreground">
-                  {currentLocale === "zh"
-                    ? "默认账号：admin / admin123"
-                    : "Default: admin / admin123"}
+                  {copy.defaultAccount}
                 </p>
               </div>
             </div>

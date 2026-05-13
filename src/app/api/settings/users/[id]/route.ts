@@ -34,6 +34,14 @@ export const PUT = withTryCatch(async (req: NextRequest, context) => {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
+  const targetUser = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!targetUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if (targetUser.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Cannot modify SUPER_ADMIN user" }, { status: 403 });
+  }
+
   const body = await parseBody(req, updateUserSchema);
   if (body instanceof NextResponse) return body;
 
@@ -88,6 +96,14 @@ export const DELETE = withTryCatch(async (_req: NextRequest, context) => {
   });
   if (!storeUser) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  const targetUser = await prisma.user.findUnique({ where: { id }, select: { role: true } });
+  if (!targetUser) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+  if (targetUser.role === "SUPER_ADMIN" && role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Cannot delete SUPER_ADMIN user" }, { status: 403 });
   }
 
   // Remove store link and deactivate user

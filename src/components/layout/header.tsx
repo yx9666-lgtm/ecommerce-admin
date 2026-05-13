@@ -7,7 +7,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
 import { Globe, Sun, Moon, ShoppingBag, Clock, Calendar } from "lucide-react";
 
-function useClock(locale: string) {
+function useClock(locale: "zh" | "en" | "ms") {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -15,22 +15,29 @@ function useClock(locale: string) {
     return () => clearInterval(timer);
   }, []);
 
-  const weekdays = locale === "zh"
-    ? ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"]
-    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const weekdaysByLocale: Record<"zh" | "en" | "ms", string[]> = {
+    zh: ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+    en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+    ms: ["Ahd", "Isn", "Sel", "Rab", "Kha", "Jum", "Sab"],
+  };
 
-  const date = locale === "zh"
-    ? `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
-    : now.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+  const date =
+    locale === "zh"
+      ? `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
+      : now.toLocaleDateString(locale === "ms" ? "ms-MY" : "en-US", {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
 
-  const time = now.toLocaleTimeString(locale === "zh" ? "zh-CN" : "en-US", {
+  const time = now.toLocaleTimeString(locale === "zh" ? "zh-CN" : locale === "ms" ? "ms-MY" : "en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
-    hour12: true,
+    hour12: locale !== "ms",
   });
 
-  return { date, weekday: weekdays[now.getDay()], time };
+  return { date, weekday: weekdaysByLocale[locale][now.getDay()], time };
 }
 
 export function Header() {
@@ -41,10 +48,14 @@ export function Header() {
   const theme = useAuthStore((s) => s.theme);
   const toggleTheme = useAuthStore((s) => s.toggleTheme);
 
+  const localeCycle: Array<"zh" | "en" | "ms"> = ["zh", "en", "ms"];
+  const localeBadge: Record<"zh" | "en" | "ms", string> = { zh: "中", en: "EN", ms: "BM" };
+
   const clock = useClock(locale);
 
   const toggleLocale = () => {
-    const newLocale = locale === "zh" ? "en" : "zh";
+    const index = localeCycle.indexOf(locale);
+    const newLocale = localeCycle[(index + 1) % localeCycle.length];
     setLocale(newLocale);
     router.refresh();
   };
@@ -86,7 +97,7 @@ export function Header() {
         >
           <Globe className="h-5 w-5" />
           <span className="absolute -bottom-0.5 -right-0.5 text-[9px] font-bold bg-gold-600 text-white rounded px-0.5">
-            {locale === "zh" ? "EN" : "中"}
+            {localeBadge[locale]}
           </span>
         </Button>
       </div>

@@ -2,11 +2,11 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 interface AuthStore {
-  locale: string;
+  locale: "zh" | "en" | "ms";
   currentStoreId: string | null;
   sidebarCollapsed: boolean;
   theme: "light" | "dark";
-  setLocale: (locale: string) => void;
+  setLocale: (locale: "zh" | "en" | "ms") => void;
   setCurrentStoreId: (id: string | null) => void;
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;

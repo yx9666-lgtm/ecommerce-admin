@@ -13,7 +13,6 @@ import {
   Warehouse,
   DollarSign,
   BarChart3,
-  Megaphone,
   Settings,
   Link2,
   ClipboardList,

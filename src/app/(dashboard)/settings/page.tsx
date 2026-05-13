@@ -483,7 +483,7 @@ export default function SettingsPage() {
     }
   };
 
-  const handleLanguageChange = (newLocale: string) => {
+  const handleLanguageChange = (newLocale: "zh" | "en" | "ms") => {
     setLocale(newLocale);
     window.location.reload();
   };
@@ -828,6 +828,7 @@ export default function SettingsPage() {
                   <SelectContent>
                     <SelectItem value="zh">中文 (Chinese)</SelectItem>
                     <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="ms">Bahasa Melayu</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
